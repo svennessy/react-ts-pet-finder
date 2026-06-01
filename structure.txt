@@ -1,0 +1,3 @@
+.json:
+  currently has own local dev API
+  so run dev isn't automatically using real backend unless dev-api.mjs proxies to it
