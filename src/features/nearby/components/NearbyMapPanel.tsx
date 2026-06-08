@@ -14,10 +14,16 @@ const mapTilerKey = import.meta.env.VITE_MAPTILER_KEY;
 
 const mapTilerStyle = `https://api.maptiler.com/maps/hybrid/style.json?key=${mapTilerKey}`;
 
+type UserLocation = {
+  latitude: number;
+  longitude: number;
+};
+
 type NearbyMapPanelProps = {
   pets: MapPet[];
   selectedPetId: string | null;
   selectedPet: MapPet | null;
+  userLocation: UserLocation | null;
   onBoundsChange: (bounds: MapBounds) => void;
   onPetSelect: (petId: string | null) => void;
 };
@@ -26,10 +32,13 @@ function NearbyMapPanelBase({
   pets,
   selectedPetId,
   selectedPet,
+  userLocation,
   onBoundsChange,
   onPetSelect,
 }: NearbyMapPanelProps) {
   const mapRef = useRef<MapRef | null>(null);
+  const lastFlownPetIdRef = useRef<string | null>(null);
+  const hasCenteredOnUserRef = useRef(false);
 
   const geojson = useMemo(() => {
     return {
@@ -64,6 +73,43 @@ function NearbyMapPanelBase({
       west: bounds.getWest(),
     });
   }, [onBoundsChange]);
+
+  const recenterToUser = useCallback(() => {
+    if (!userLocation) return;
+
+    const map = mapRef.current;
+    if (!map) return;
+
+    map.easeTo({
+      center: [userLocation.longitude, userLocation.latitude],
+      zoom: 11,
+      duration: 700,
+    });
+  }, [userLocation]);
+
+  useEffect(() => {
+    if (!userLocation) return;
+    if (hasCenteredOnUserRef.current) return;
+
+    hasCenteredOnUserRef.current = true;
+    recenterToUser();
+  }, [userLocation, recenterToUser]);
+
+  useEffect(() => {
+    if (!selectedPet) return;
+    if (lastFlownPetIdRef.current === selectedPet.id) return;
+
+    lastFlownPetIdRef.current = selectedPet.id;
+
+    const map = mapRef.current;
+    if (!map) return;
+
+    map.easeTo({
+      center: [selectedPet.longitude, selectedPet.latitude],
+      zoom: Math.max(map.getZoom(), 12),
+      duration: 600,
+    });
+  }, [selectedPet?.id, selectedPet]);
 
   const handleMapClick = useCallback(
     (event: maplibregl.MapLayerMouseEvent) => {
@@ -102,33 +148,15 @@ function NearbyMapPanelBase({
     [onPetSelect],
   );
 
-  const lastFlownPetIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!selectedPet) return;
-    if (lastFlownPetIdRef.current === selectedPet.id) return;
-
-    lastFlownPetIdRef.current = selectedPet.id;
-
-    const map = mapRef.current;
-    if (!map) return;
-
-    map.easeTo({
-      center: [selectedPet.longitude, selectedPet.latitude],
-      zoom: Math.max(map.getZoom(), 12),
-      duration: 600,
-    });
-  }, [selectedPet?.id]);
-
   return (
-    <div style={{ width: "100%", height: "100%" }}>
+    <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <Map
         ref={mapRef}
         mapLib={maplibregl}
         initialViewState={{
-          longitude: -98.5795,
-          latitude: 39.8283,
-          zoom: 4,
+          longitude: userLocation?.longitude ?? -98.5795,
+          latitude: userLocation?.latitude ?? 39.8283,
+          zoom: userLocation ? 11 : 4,
         }}
         mapStyle={mapTilerStyle}
         interactiveLayerIds={["clusters", "unclustered-pets", "selected-pets"]}
@@ -226,24 +254,47 @@ function NearbyMapPanelBase({
               "circle-stroke-color": "#ffffff",
             }}
           />
-          {selectedPet ? (
-            <Popup
-              longitude={selectedPet.longitude}
-              latitude={selectedPet.latitude}
-              anchor="bottom"
-              closeButton
-              closeOnClick={false}
-              onClose={() => onPetSelect(null)}
-            >
-              <strong>{selectedPet.name}</strong>
-              <p>
-                {selectedPet.reportStatus} · {selectedPet.species} ·{" "}
-                {selectedPet.breedLabel}
-              </p>
-            </Popup>
-          ) : null}
         </Source>
+
+        {selectedPet ? (
+          <Popup
+            longitude={selectedPet.longitude}
+            latitude={selectedPet.latitude}
+            anchor="bottom"
+            closeButton
+            closeOnClick={false}
+            onClose={() => onPetSelect(null)}
+          >
+            <strong>{selectedPet.name}</strong>
+            <p style={{ margin: "4px 0 0" }}>
+              {selectedPet.reportStatus} · {selectedPet.species} ·{" "}
+              {selectedPet.breedLabel}
+            </p>
+          </Popup>
+        ) : null}
       </Map>
+
+      {userLocation ? (
+        <button
+          type="button"
+          onClick={recenterToUser}
+          style={{
+            position: "absolute",
+            right: 16,
+            bottom: 32,
+            zIndex: 5,
+            border: 0,
+            borderRadius: 999,
+            padding: "10px 14px",
+            background: "white",
+            fontWeight: 700,
+            cursor: "pointer",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+          }}
+        >
+          Near me
+        </button>
+      ) : null}
     </div>
   );
 }

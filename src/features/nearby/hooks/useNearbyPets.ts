@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchMapPets } from "../../../api/pets";
+import { fetchMapPets, type MapPetFilters } from "../../../api/pets";
 import type { MapBounds, MapPet } from "../../../api/types";
 
 type UseNearbyPetsResult = {
@@ -12,6 +12,7 @@ type UseNearbyPetsResult = {
 
 export function useNearbyPets(
   bounds: MapBounds | null,
+  filters: MapPetFilters = {},
 ): UseNearbyPetsResult {
   const [pets, setPets] = useState<MapPet[]>([]);
   const [total, setTotal] = useState(0);
@@ -25,22 +26,27 @@ export function useNearbyPets(
 
   useEffect(() => {
     if (!bounds) return;
-  
+
     const currentBounds = bounds;
+    const currentFilters = filters;
     const controller = new AbortController();
-  
+
     async function loadPets() {
       setLoading(true);
       setError(null);
-  
+
       try {
-        const result = await fetchMapPets(currentBounds, controller.signal);
-  
+        const result = await fetchMapPets(
+          currentBounds,
+          currentFilters,
+          controller.signal,
+        );
+
         setPets(result.pets);
         setTotal(result.total);
       } catch (err) {
         if (controller.signal.aborted) return;
-  
+
         setError(err instanceof Error ? err.message : "Failed to load pets");
         setPets([]);
         setTotal(0);
@@ -50,9 +56,9 @@ export function useNearbyPets(
         }
       }
     }
-  
+
     void loadPets();
-  
+
     return () => {
       controller.abort();
     };
@@ -61,6 +67,9 @@ export function useNearbyPets(
     bounds?.south,
     bounds?.east,
     bounds?.west,
+    filters.species,
+    filters.reportStatus,
+    filters.search,
     reloadKey,
   ]);
 

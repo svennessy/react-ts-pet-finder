@@ -1,0 +1,8 @@
+Setting up user accounts:
+  public browsing: anyone can view map/cards/details
+  auth/account system: sign up/login/session/profile
+  verification gate: verified users can post/message
+  create pet listing: requires account & verified status
+  upload pet photos: tied to listing owner
+  messaging: only verified users can start/reply
+  moderation/admin tools: report listings/messages, remove abuse

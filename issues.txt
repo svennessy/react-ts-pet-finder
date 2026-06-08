@@ -1,0 +1,7 @@
+pressing:
+overlap of markers in same area
+change breed selections to dropdown
+
+eventually:
+ugly ass ui
+filter descriptions for explicit content
