@@ -1,6 +1,6 @@
 export type PetSpecies = "dog" | "cat" | "other";
 
-export type PetReportStatus = "lost" | "found";
+export type PetReportStatus = "lost" | "found" | "resolved";
 
 export type PetPhoto = {
   id: number;
@@ -31,6 +31,7 @@ export type MapPet = {
     id: string;
     firstName: string;
     lastName: string;
+    email: string;
     city: {
       name: string;
       stateCode: string;

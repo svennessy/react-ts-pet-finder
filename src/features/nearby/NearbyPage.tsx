@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { createPetReport, deletePetReport } from "../../api/postPets";
+import { usePetReportActions } from "./hooks/usePetReportActions";
 import type { MapBounds, PetReportStatus, PetSpecies } from "../../api/types";
 import { useAuthSession } from "../auth/useAuthSession";
 import { useProfile } from "../auth/useProfile";
@@ -15,6 +15,19 @@ import { useDebouncedValue } from "./hooks/useDebouncedValue";
 import { useMapBounds } from "./hooks/useMapBounds";
 import { useNearbyPets } from "./hooks/useNearbyPets";
 import { useUserLocation } from "./hooks/useUserLocation";
+import { deletePetPhoto } from "../../api/photos";
+
+const DEFAULT_POST_PET_DRAFT: PostPetDraft = {
+  reportStatus: "lost",
+  species: "dog",
+  name: "",
+  breedLabel: "",
+  description: "",
+  latitude: null,
+  longitude: null,
+  photos: [],
+  existingPhotos: [],
+};
 
 export function NearbyPage() {
   const { bounds, updateBounds } = useMapBounds();
@@ -27,19 +40,11 @@ export function NearbyPage() {
   const [search, setSearch] = useState("");
   const [selectedPetId, setSelectedPetId] = useState<string | null>(null);
   const [postPetOpen, setPostPetOpen] = useState(false);
-  const [savingPost, setSavingPost] = useState(false);
-  const [deletingPet, setDeletingPet] = useState(false);
+  const [editingPetId, setEditingPetId] = useState<string | null>(null);
 
-  const [postPetDraft, setPostPetDraft] = useState<PostPetDraft>({
-    reportStatus: "lost",
-    species: "dog",
-    name: "",
-    breedLabel: "",
-    description: "",
-    latitude: null,
-    longitude: null,
-    photos: [],
-  });
+  const [postPetDraft, setPostPetDraft] = useState<PostPetDraft>(
+    DEFAULT_POST_PET_DRAFT,
+  );
 
   const auth = useAuthSession();
   const { profile, loading: profileLoading } = useProfile();
@@ -61,6 +66,22 @@ export function NearbyPage() {
     filters,
   );
 
+  const {
+    savingPost,
+    deletingPet,
+    updatingPost,
+    resolvingPet,
+    handleCreatePetReport,
+    handleDeletePetReport,
+    handleUpdatePetReport,
+    handleResolvePetReport,
+  } = usePetReportActions({
+    reload,
+    setSelectedPetId,
+    setPostPetOpen,
+    resetDraft: () => setPostPetDraft(DEFAULT_POST_PET_DRAFT),
+  });
+
   const selectedPet = pets.find((pet) => pet.id === selectedPetId) ?? null;
 
   const sidebarPets = selectedPetId
@@ -77,57 +98,69 @@ export function NearbyPage() {
     [updateBounds],
   );
 
-  async function handleCreatePetReport() {
-    if (postPetDraft.latitude === null || postPetDraft.longitude === null) {
-      alert("Choose a location for the pet.");
-      return;
-    }
+  function handleEditSelectedPet() {
+    if (!selectedPet) return;
 
-    setSavingPost(true);
+    setEditingPetId(selectedPet.id);
 
-    try {
-      await createPetReport({
-        reportStatus: postPetDraft.reportStatus,
-        species: postPetDraft.species,
-        name: postPetDraft.name,
-        breedLabel: postPetDraft.breedLabel,
-        description: postPetDraft.description,
-        latitude: postPetDraft.latitude,
-        longitude: postPetDraft.longitude,
-      });
+    setPostPetDraft({
+      reportStatus: selectedPet.reportStatus,
+      species: selectedPet.species,
+      name: selectedPet.name,
+      breedLabel: selectedPet.breedLabel,
+      description: selectedPet.description ?? "",
+      latitude: selectedPet.latitude,
+      longitude: selectedPet.longitude,
+      photos: [],
+      existingPhotos:
+        selectedPet.photos
+          ?.map((photo) => {
+            const imageUrl =
+              photo.resolvedUrl ?? photo.imageUrl ?? photo.imagePath;
 
-      setPostPetOpen(false);
-      setPostPetDraft({
-        reportStatus: "lost",
-        species: "dog",
-        name: "",
-        breedLabel: "",
-        description: "",
-        latitude: null,
-        longitude: null,
-        photos: [],
-      });
+            if (!imageUrl) return null;
 
-      reload();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to save report.");
-    } finally {
-      setSavingPost(false);
-    }
+            return {
+              id: photo.id,
+              imageUrl,
+            };
+          })
+          .filter(
+            (photo): photo is { id: number; imageUrl: string } =>
+              photo !== null,
+          ) ?? [],
+    });
+
+    setPostPetOpen(true);
   }
 
-  async function handleDeletePetReport(petId: string) {
-    setDeletingPet(true);
-
-    try {
-      await deletePetReport(petId);
-      setSelectedPetId(null);
-      reload();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to delete report.");
-    } finally {
-      setDeletingPet(false);
+  function handleSubmitPetReport() {
+    if (editingPetId) {
+      return handleUpdatePetReport(editingPetId, postPetDraft).finally(() => {
+        setEditingPetId(null);
+      });
     }
+
+    return handleCreatePetReport(postPetDraft);
+  }
+
+  function handleClosePostPetModal() {
+    setPostPetOpen(false);
+    setEditingPetId(null);
+    setPostPetDraft(DEFAULT_POST_PET_DRAFT);
+  }
+
+  async function handleDeleteExistingPhoto(photoId: number) {
+    await deletePetPhoto(photoId);
+  
+    setPostPetDraft((draft) => ({
+      ...draft,
+      existingPhotos: draft.existingPhotos?.filter(
+        (photo) => photo.id !== photoId,
+      ),
+    }));
+  
+    await reload();
   }
 
   useEffect(() => {
@@ -204,20 +237,25 @@ export function NearbyPage() {
           canDelete={
             auth.isAuthenticated &&
             profile?.isVerified &&
-            selectedPet?.owner?.id === auth.userId
+            selectedPet?.owner?.email === profile?.email
           }
           deleting={deletingPet}
           onDelete={handleDeletePetReport}
+          onEdit={handleEditSelectedPet}
+          onResolve={handleResolvePetReport}
+          resolving={resolvingPet}
         />
 
         <PostPetModal
           open={postPetOpen}
           value={postPetDraft}
           onChange={setPostPetDraft}
-          onClose={() => setPostPetOpen(false)}
+          onClose={handleClosePostPetModal}
           userLocation={userLocation.location}
-          onSubmit={handleCreatePetReport}
-          saving={savingPost}
+          onSubmit={handleSubmitPetReport}
+          saving={savingPost || updatingPost}
+          mode={editingPetId ? "edit" : "create"}
+          onDeleteExistingPhoto={handleDeleteExistingPhoto}
         />
       </div>
     </main>

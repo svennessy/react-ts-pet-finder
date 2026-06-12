@@ -148,6 +148,20 @@ function NearbyMapPanelBase({
     [onPetSelect],
   );
 
+  const handleMouseEnter = useCallback(() => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+
+    map.getCanvas().style.cursor = "pointer";
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+
+    map.getCanvas().style.cursor = "";
+  }, []);
+
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <Map
@@ -163,6 +177,8 @@ function NearbyMapPanelBase({
         onClick={handleMapClick}
         onLoad={updateBoundsFromMap}
         onMoveEnd={updateBoundsFromMap}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
         <NavigationControl position="top-right" />
 

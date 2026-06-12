@@ -113,3 +113,36 @@ export async function apiDelete<TResponse>(
 
   return json as TResponse;
 }
+
+export async function apiPatch<TResponse, TBody>(
+  path: string,
+  body: TBody,
+  signal?: AbortSignal,
+): Promise<TResponse> {
+  const token = await getAccessToken();
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "PATCH",
+    signal,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+
+  const json = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message =
+      json && typeof json === "object" && "error" in json
+        ? String(json.error)
+        : `Request failed with status ${response.status}`;
+
+    throw new Error(message);
+  }
+
+  if (isApiEnvelope<TResponse>(json)) return json.data;
+
+  return json as TResponse;
+}

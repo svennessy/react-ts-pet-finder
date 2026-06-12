@@ -9,4 +9,9 @@ export type PostPetDraft = {
   latitude: number | null;
   longitude: number | null;
   photos: File[];
+
+  existingPhotos?: {
+    id: number;
+    imageUrl: string;
+  }[];
 };

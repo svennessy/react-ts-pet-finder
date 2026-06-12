@@ -1,6 +1,8 @@
 pressing:
 overlap of markers in same area
 change breed selections to dropdown
+uppercase user inputs 
+have a lorem ipsum example for description inputs
 
 eventually:
 ugly ass ui

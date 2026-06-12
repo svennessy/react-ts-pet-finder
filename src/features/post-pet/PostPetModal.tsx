@@ -14,6 +14,8 @@ type PostPetModalProps = {
   userLocation: UserLocation | null;
   onSubmit: () => void;
   saving: boolean;
+  mode?: "create" | "edit";
+  onDeleteExistingPhoto?: (photoId: number) => Promise<void>;
 };
 
 export function PostPetModal({
@@ -24,8 +26,13 @@ export function PostPetModal({
   userLocation,
   onSubmit,
   saving,
+  mode = "create",
+  onDeleteExistingPhoto,
 }: PostPetModalProps) {
   if (!open) return null;
+  const title = mode === "edit" ? "Edit pet report" : "Post a pet report";
+  const submitLabel = mode === "edit" ? "Save changes" : "Post report";
+  const savingLabel = mode === "edit" ? "Saving changes..." : "Posting...";
 
   return (
     <div
@@ -61,9 +68,12 @@ export function PostPetModal({
           }}
         >
           <div>
-            <h2 style={{ margin: 0 }}>Post a pet</h2>
+            <h2 style={{ margin: 0 }}>{title}</h2>
+
             <p style={{ margin: "4px 0 0", color: "#6b7280" }}>
-              Create a lost or found pet report.
+              {mode === "edit"
+                ? "Update your existing pet report."
+                : "Create a lost or found pet report."}
             </p>
           </div>
 
@@ -76,6 +86,7 @@ export function PostPetModal({
           value={value}
           onChange={onChange}
           userLocation={userLocation}
+          onDeleteExistingPhoto={onDeleteExistingPhoto ?? undefined}
         />
 
         <button
@@ -94,7 +105,7 @@ export function PostPetModal({
             cursor: saving ? "not-allowed" : "pointer",
           }}
         >
-          {saving ? "Saving..." : "Save report"}
+          {saving ? savingLabel : submitLabel}
         </button>
       </section>
     </div>

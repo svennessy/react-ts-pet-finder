@@ -7,6 +7,9 @@ type PetDetailDrawerProps = {
   canDelete?: boolean;
   deleting?: boolean;
   onDelete?: (petId: string) => void;
+  onEdit?: () => void;
+  onResolve?: (petId: string) => void;
+  resolving?: boolean;
 };
 
 function getPhotoUrl(photo: PetPhoto) {
@@ -19,6 +22,9 @@ export function PetDetailDrawer({
   canDelete = false,
   deleting = false,
   onDelete,
+  onEdit,
+  onResolve,
+  resolving = false,
 }: PetDetailDrawerProps) {
   const [photoIndex, setPhotoIndex] = useState(0);
 
@@ -149,6 +155,51 @@ export function PetDetailDrawer({
               {pet.owner.firstName} {pet.owner.lastName}
             </p>
           </>
+        ) : null}
+
+        {canDelete && pet.reportStatus !== "resolved" && onResolve ? (
+          <button
+            type="button"
+            disabled={resolving}
+            onClick={() => {
+              const confirmed = window.confirm("Mark this report as resolved?");
+
+              if (confirmed) {
+                onResolve(pet.id);
+              }
+            }}
+            style={{
+              marginTop: 16,
+              width: "100%",
+              border: 0,
+              borderRadius: 999,
+              padding: "12px 16px",
+              background: "#16a34a",
+              color: "white",
+              fontWeight: 700,
+            }}
+          >
+            {resolving ? "Updating..." : "Mark resolved"}
+          </button>
+        ) : null}
+        {canDelete && onEdit ? (
+          <button
+            type="button"
+            onClick={onEdit}
+            style={{
+              marginTop: 16,
+              width: "100%",
+              border: 0,
+              borderRadius: 999,
+              padding: "12px 16px",
+              background: "#2563eb",
+              color: "white",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Edit report
+          </button>
         ) : null}
 
         {canDelete && onDelete ? (

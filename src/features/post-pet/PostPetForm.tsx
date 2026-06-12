@@ -11,9 +11,15 @@ type PostPetFormProps = {
   value: PostPetDraft;
   onChange: (value: PostPetDraft) => void;
   userLocation: UserLocation | null;
+  onDeleteExistingPhoto?: (photoId: number) => Promise<void>;
 };
 
-export function PostPetForm({ value, onChange, userLocation }: PostPetFormProps) {
+export function PostPetForm({
+  value,
+  onChange,
+  userLocation,
+  onDeleteExistingPhoto,
+}: PostPetFormProps) {
   return (
     <form style={{ display: "grid", gap: 12 }}>
       <select
@@ -79,12 +85,14 @@ export function PostPetForm({ value, onChange, userLocation }: PostPetFormProps)
 
       <PostPetPhotoUpload
         photos={value.photos}
+        existingPhotos={value.existingPhotos}
         onChange={(photos) =>
           onChange({
             ...value,
             photos,
           })
         }
+        onDeleteExistingPhoto={onDeleteExistingPhoto}
       />
 
       <PostPetLocationPicker
