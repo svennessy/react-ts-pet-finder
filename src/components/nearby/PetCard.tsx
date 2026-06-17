@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { MapPet, PetPhoto } from "../../../api/types";
+import type { MapPet, PetPhoto } from "../../types/pets";
+import { formatRelativeTime } from "../../utils/nearby/formatRelativeTime";
 
 type PetCardProps = {
   pet: MapPet & {
@@ -22,15 +23,20 @@ function getPhotoUrl(photo: PetPhoto) {
 export function PetCard({ pet, selected, onSelect }: PetCardProps) {
   const [photoIndex, setPhotoIndex] = useState(0);
 
-  const statusLabel = pet.reportStatus === "lost" ? "Lost" : "Found";
+  const statusLabel =
+    pet.reportStatus === "lost"
+      ? "Lost"
+      : pet.reportStatus === "found"
+        ? "Found"
+        : "Resolved";
   const photos = pet.photos ?? [];
   const currentPhoto = photos[photoIndex] ?? null;
 
   const location =
-  pet.locationLabel ||
-  (pet.owner?.city
-    ? `${pet.owner.city.name}, ${pet.owner.city.stateCode}`
-    : `${pet.latitude.toFixed(4)}, ${pet.longitude.toFixed(4)}`);
+    pet.locationLabel ||
+    (pet.owner?.city
+      ? `${pet.owner.city.name}, ${pet.owner.city.stateCode}`
+      : `${pet.latitude.toFixed(4)}, ${pet.longitude.toFixed(4)}`);
 
   return (
     <article
@@ -139,6 +145,11 @@ export function PetCard({ pet, selected, onSelect }: PetCardProps) {
         </strong>
 
         <h3 style={{ margin: "8px 0 4px" }}>{pet.name}</h3>
+
+        <p style={{ margin: "0 0 6px", color: "#6b7280", fontSize: 13 }}>
+          {statusLabel} • {formatRelativeTime(pet.createdAt)}
+        </p>
+
         <p style={{ margin: 0 }}>{pet.breedLabel}</p>
 
         <p style={{ margin: "6px 0 0", color: "#6b7280" }}>{location}</p>

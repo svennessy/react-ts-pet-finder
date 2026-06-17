@@ -8,7 +8,8 @@ import Map, {
 } from "react-map-gl/maplibre";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { MapBounds, MapPet } from "../../../api/types";
+import type { MapBounds } from "../../types/map";
+import type { MapPet } from "../../types/pets";
 
 const mapTilerKey = import.meta.env.VITE_MAPTILER_KEY;
 
@@ -26,7 +27,34 @@ type NearbyMapPanelProps = {
   userLocation: UserLocation | null;
   onBoundsChange: (bounds: MapBounds) => void;
   onPetSelect: (petId: string | null) => void;
+  onViewChange?: (view: {
+    latitude: number;
+    longitude: number;
+    zoom: number;
+  }) => void;
 };
+
+function getInitialMapView(userLocation: UserLocation | null) {
+  const params = new URLSearchParams(window.location.search);
+
+  const lat = Number(params.get("lat"));
+  const lng = Number(params.get("lng"));
+  const zoom = Number(params.get("zoom"));
+
+  if (Number.isFinite(lat) && Number.isFinite(lng) && Number.isFinite(zoom)) {
+    return {
+      latitude: lat,
+      longitude: lng,
+      zoom,
+    };
+  }
+
+  return {
+    latitude: userLocation?.latitude ?? 39.8283,
+    longitude: userLocation?.longitude ?? -98.5795,
+    zoom: userLocation ? 11 : 4,
+  };
+}
 
 function NearbyMapPanelBase({
   pets,
@@ -35,6 +63,7 @@ function NearbyMapPanelBase({
   userLocation,
   onBoundsChange,
   onPetSelect,
+  onViewChange,
 }: NearbyMapPanelProps) {
   const mapRef = useRef<MapRef | null>(null);
   const lastFlownPetIdRef = useRef<string | null>(null);
@@ -72,7 +101,13 @@ function NearbyMapPanelBase({
       east: bounds.getEast(),
       west: bounds.getWest(),
     });
-  }, [onBoundsChange]);
+
+    onViewChange?.({
+      latitude: map.getCenter().lat,
+      longitude: map.getCenter().lng,
+      zoom: map.getZoom(),
+    });
+  }, [onBoundsChange, onViewChange]);
 
   const recenterToUser = useCallback(() => {
     if (!userLocation) return;
@@ -88,6 +123,11 @@ function NearbyMapPanelBase({
   }, [userLocation]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hasUrlView =
+      params.has("lat") && params.has("lng") && params.has("zoom");
+
+    if (hasUrlView) return;
     if (!userLocation) return;
     if (hasCenteredOnUserRef.current) return;
 
@@ -162,21 +202,26 @@ function NearbyMapPanelBase({
     map.getCanvas().style.cursor = "";
   }, []);
 
+  const initialView = useMemo(
+    () => getInitialMapView(userLocation),
+    [userLocation],
+  );
+
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <Map
         ref={mapRef}
         mapLib={maplibregl}
         initialViewState={{
-          longitude: userLocation?.longitude ?? -98.5795,
-          latitude: userLocation?.latitude ?? 39.8283,
-          zoom: userLocation ? 11 : 4,
+          longitude: initialView.longitude,
+          latitude: initialView.latitude,
+          zoom: initialView.zoom,
         }}
         mapStyle={mapTilerStyle}
         interactiveLayerIds={["clusters", "unclustered-pets", "selected-pets"]}
         onClick={handleMapClick}
         onLoad={updateBoundsFromMap}
-        onMoveEnd={updateBoundsFromMap}
+        onIdle={updateBoundsFromMap}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >

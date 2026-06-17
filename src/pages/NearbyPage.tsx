@@ -1,21 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { usePetReportActions } from "./hooks/usePetReportActions";
-import type { MapBounds, PetReportStatus, PetSpecies } from "../../api/types";
-import { useAuthSession } from "../auth/useAuthSession";
-import { useProfile } from "../auth/useProfile";
-import { PostPetButton } from "../post-pet/PostPetButton";
-import { PostPetModal } from "../post-pet/PostPetModal";
-import type { PostPetDraft } from "../post-pet/types";
-import { NearbyFilters } from "./components/NearbyFilters";
-import { NearbyMapPanel } from "./components/NearbyMapPanel";
-import { NearbySidebar } from "./components/NearbySidebar";
-import { PetDetailDrawer } from "./components/PetDetailDrawer";
-import { useDebouncedValue } from "./hooks/useDebouncedValue";
-import { useMapBounds } from "./hooks/useMapBounds";
-import { useNearbyPets } from "./hooks/useNearbyPets";
-import { useUserLocation } from "./hooks/useUserLocation";
-import { deletePetPhoto } from "../../api/photos";
+import { deletePetPhoto } from "../api/photos";
+import { createPetSighting } from "../api/sightings";
+import type { MapBounds } from "../types/map";
+import type { PostPetDraft } from "../types/forms";
+import type {
+  PetReportStatus,
+  PetSortOption,
+  PetSpecies,
+} from "../types/pets";
+import { useAuthSession } from "../hooks/auth/useAuthSession";
+import { useProfile } from "../hooks/auth/useProfile";
+import { NearbyFilters } from "../components/nearby/NearbyFilters";
+import { NearbyMapPanel } from "../components/nearby/NearbyMapPanel";
+import { NearbySidebar } from "../components/nearby/NearbySidebar";
+import { PetDetailDrawer } from "../components/nearby/PetDetailDrawer";
+import { ReportSightingModal } from "../components/nearby/ReportSightingModal";
+import { useDebouncedValue } from "../hooks/nearby/useDebouncedValue";
+import { useMapBounds } from "../hooks/nearby/useMapBounds";
+import { useNearbyPets } from "../hooks/nearby/useNearbyPets";
+import { usePetDetails } from "../hooks/nearby/usePetDetails";
+import { usePetReportActions } from "../hooks/nearby/usePetReportActions";
+import { useUserLocation } from "../hooks/nearby/useUserLocation";
+import { PostPetButton } from "../components/post-pet/PostPetButton";
+import { PostPetModal } from "../components/post-pet/PostPetModal";
+
 
 const DEFAULT_POST_PET_DRAFT: PostPetDraft = {
   reportStatus: "lost",
@@ -41,6 +50,9 @@ export function NearbyPage() {
   const [selectedPetId, setSelectedPetId] = useState<string | null>(null);
   const [postPetOpen, setPostPetOpen] = useState(false);
   const [editingPetId, setEditingPetId] = useState<string | null>(null);
+  const [sort, setSort] = useState<PetSortOption>("newest");
+  const [sightingOpen, setSightingOpen] = useState(false);
+  const [savingSighting, setSavingSighting] = useState(false);
 
   const [postPetDraft, setPostPetDraft] = useState<PostPetDraft>(
     DEFAULT_POST_PET_DRAFT,
@@ -57,8 +69,9 @@ export function NearbyPage() {
       species,
       reportStatus,
       search: debouncedSearch,
+      sort,
     }),
-    [species, reportStatus, debouncedSearch],
+    [species, reportStatus, debouncedSearch, sort],
   );
 
   const { pets, total, loading, error, reload } = useNearbyPets(
@@ -82,7 +95,10 @@ export function NearbyPage() {
     resetDraft: () => setPostPetDraft(DEFAULT_POST_PET_DRAFT),
   });
 
-  const selectedPet = pets.find((pet) => pet.id === selectedPetId) ?? null;
+  const selectedMapPet = pets.find((pet) => pet.id === selectedPetId) ?? null;
+
+  const { pet: selectedPet, loading: selectedPetLoading } =
+    usePetDetails(selectedPetId);
 
   const sidebarPets = selectedPetId
     ? [
@@ -152,14 +168,14 @@ export function NearbyPage() {
 
   async function handleDeleteExistingPhoto(photoId: number) {
     await deletePetPhoto(photoId);
-  
+
     setPostPetDraft((draft) => ({
       ...draft,
       existingPhotos: draft.existingPhotos?.filter(
         (photo) => photo.id !== photoId,
       ),
     }));
-  
+
     await reload();
   }
 
@@ -172,12 +188,50 @@ export function NearbyPage() {
     });
   }, [selectedPetId]);
 
+  function handleMapViewChange(view: {
+    latitude: number;
+    longitude: number;
+    zoom: number;
+  }) {
+    const params = new URLSearchParams(window.location.search);
+
+    params.set("lat", view.latitude.toFixed(5));
+    params.set("lng", view.longitude.toFixed(5));
+    params.set("zoom", view.zoom.toFixed(2));
+
+    window.history.replaceState(null, "", `?${params.toString()}`);
+  }
+
+  async function handleSubmitSighting(values: {
+    latitude: number;
+    longitude: number;
+    notes: string;
+  }) {
+    if (!selectedPet) return;
+
+    setSavingSighting(true);
+
+    try {
+      await createPetSighting(selectedPet.id, {
+        latitude: values.latitude,
+        longitude: values.longitude,
+        notes: values.notes,
+      });
+
+      setSightingOpen(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to save sighting.");
+    } finally {
+      setSavingSighting(false);
+    }
+  }
+
   return (
     <main
       style={{
         display: "grid",
         gridTemplateColumns: "420px minmax(0, 1fr)",
-        height: "100vh",
+        height: "calc(100vh - 64px)",
         width: "100vw",
         overflow: "hidden",
       }}
@@ -187,9 +241,11 @@ export function NearbyPage() {
           species={species}
           reportStatus={reportStatus}
           search={search}
+          sort={sort}
           onSpeciesChange={setSpecies}
           onReportStatusChange={setReportStatus}
           onSearchChange={setSearch}
+          onSortChange={setSort}
         />
 
         <NearbySidebar
@@ -207,10 +263,11 @@ export function NearbyPage() {
         <NearbyMapPanel
           pets={pets}
           selectedPetId={selectedPetId}
-          selectedPet={selectedPet}
+          selectedPet={selectedMapPet}
           userLocation={userLocation.location}
           onBoundsChange={handleBoundsChange}
           onPetSelect={setSelectedPetId}
+          onViewChange={handleMapViewChange}
         />
 
         <PostPetButton
@@ -233,6 +290,7 @@ export function NearbyPage() {
 
         <PetDetailDrawer
           pet={selectedPet}
+          loading={selectedPetLoading}
           onClose={() => setSelectedPetId(null)}
           canDelete={
             auth.isAuthenticated &&
@@ -244,6 +302,7 @@ export function NearbyPage() {
           onEdit={handleEditSelectedPet}
           onResolve={handleResolvePetReport}
           resolving={resolvingPet}
+          onReportSighting={() => setSightingOpen(true)}
         />
 
         <PostPetModal
@@ -257,6 +316,19 @@ export function NearbyPage() {
           mode={editingPetId ? "edit" : "create"}
           onDeleteExistingPhoto={handleDeleteExistingPhoto}
         />
+
+        {selectedPet ? (
+          <ReportSightingModal
+            open={sightingOpen}
+            onClose={() => setSightingOpen(false)}
+            onSubmit={handleSubmitSighting}
+            defaultLocation={{
+              latitude: selectedPet.latitude,
+              longitude: selectedPet.longitude,
+            }}
+            saving={savingSighting}
+          />
+        ) : null}
       </div>
     </main>
   );

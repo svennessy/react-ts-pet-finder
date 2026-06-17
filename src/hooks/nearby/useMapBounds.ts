@@ -2,7 +2,7 @@
 // map moves -> updateBounds(...) -> useNearbyPets(bounds) -> backend fetch
 
 import { useCallback, useState } from "react";
-import type { MapBounds } from "../../../api/types";
+import type { MapBounds } from "../../types/map";
 
 export function useMapBounds() {
   const [bounds, setBounds] = useState<MapBounds | null>(null);

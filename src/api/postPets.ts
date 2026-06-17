@@ -1,5 +1,5 @@
 import { apiPost, apiDelete, apiPatch } from "./client";
-import type { PetReportStatus, PetSpecies } from "./types";
+import type { PetReportStatus, PetSpecies } from "../types/pets";
 
 export type CreatePetReportBody = {
   reportStatus: PetReportStatus;

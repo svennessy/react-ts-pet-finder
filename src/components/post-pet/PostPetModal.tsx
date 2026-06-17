@@ -1,4 +1,4 @@
-import type { PostPetDraft } from "./types";
+import type { PostPetDraft } from "../../types/forms";
 import { PostPetForm } from "./PostPetForm";
 
 type UserLocation = {

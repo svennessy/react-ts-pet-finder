@@ -1,12 +1,7 @@
 import { apiGet } from "./client";
+import type { Profile } from "../types/auth";
 
-export type Profile = {
-  id: string;
-  email: string;
-  firstName: string | null;
-  lastName: string | null;
-  isVerified: boolean;
-};
+export type { Profile };
 
 export async function getMyProfile() {
   return apiGet<Profile>("/api/profiles/me");

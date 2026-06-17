@@ -1,4 +1,9 @@
-import type { PetReportStatus, PetSpecies } from "../../api/types";
+import type { PetReportStatus, PetSpecies } from "./pets";
+
+export type ExistingPhoto = {
+  id: number;
+  imageUrl: string;
+};
 
 export type PostPetDraft = {
   reportStatus: PetReportStatus;
@@ -9,9 +14,5 @@ export type PostPetDraft = {
   latitude: number | null;
   longitude: number | null;
   photos: File[];
-
-  existingPhotos?: {
-    id: number;
-    imageUrl: string;
-  }[];
+  existingPhotos?: ExistingPhoto[];
 };

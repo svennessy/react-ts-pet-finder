@@ -1,10 +1,16 @@
 import type { CSSProperties } from "react";
-import type { PetReportStatus, PetSpecies } from "../../../api/types";
+import type {
+  PetReportStatus,
+  PetSpecies,
+  PetSortOption,
+} from "../../types/pets";
 
 type NearbyFiltersProps = {
   species: PetSpecies | "all";
   reportStatus: PetReportStatus | "all";
   search: string;
+  sort: PetSortOption;
+  onSortChange: (sort: PetSortOption) => void;
   onSpeciesChange: (species: PetSpecies | "all") => void;
   onReportStatusChange: (status: PetReportStatus | "all") => void;
   onSearchChange: (search: string) => void;
@@ -29,6 +35,8 @@ export function NearbyFilters({
   onSpeciesChange,
   onReportStatusChange,
   onSearchChange,
+  sort,
+  onSortChange,
 }: NearbyFiltersProps) {
   return (
     <div style={{ padding: 12, borderBottom: "1px solid #e5e7eb" }}>
@@ -47,7 +55,24 @@ export function NearbyFilters({
       />
 
       <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-        {(["all", "lost", "found"] as const).map((status) => (
+        {(["newest", "oldest", "name"] as const).map((nextSort) => (
+          <button
+            key={nextSort}
+            type="button"
+            style={pillStyle(sort === nextSort)}
+            onClick={() => onSortChange(nextSort)}
+          >
+            {nextSort === "newest"
+              ? "Newest"
+              : nextSort === "oldest"
+                ? "Oldest"
+                : "Name"}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+        {(["all", "lost", "found", "resolved"] as const).map((status) => (
           <button
             key={status}
             type="button"
@@ -58,7 +83,9 @@ export function NearbyFilters({
               ? "Lost & found"
               : status === "lost"
                 ? "Lost"
-                : "Found"}
+                : status === "found"
+                  ? "Found"
+                  : "Resolved"}
           </button>
         ))}
       </div>

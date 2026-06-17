@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import type { MapPet, PetPhoto } from "../../../api/types";
+import type { MapPet, PetPhoto } from "../../types/pets";
+import { formatRelativeTime } from "../../utils/nearby/formatRelativeTime";
 
 type PetDetailDrawerProps = {
   pet: MapPet | null;
@@ -10,6 +11,8 @@ type PetDetailDrawerProps = {
   onEdit?: () => void;
   onResolve?: (petId: string) => void;
   resolving?: boolean;
+  loading?: boolean;
+  onReportSighting?: () => void;
 };
 
 function getPhotoUrl(photo: PetPhoto) {
@@ -25,6 +28,8 @@ export function PetDetailDrawer({
   onEdit,
   onResolve,
   resolving = false,
+  loading = false,
+  onReportSighting,
 }: PetDetailDrawerProps) {
   const [photoIndex, setPhotoIndex] = useState(0);
 
@@ -32,9 +37,37 @@ export function PetDetailDrawer({
     setPhotoIndex(0);
   }, [pet?.id]);
 
+  if (loading) {
+    return (
+      <aside
+        style={{
+          position: "absolute",
+          right: 16,
+          top: 16,
+          width: 360,
+          background: "white",
+          borderRadius: 16,
+          padding: 16,
+          boxShadow: "0 16px 48px rgba(0,0,0,0.3)",
+          zIndex: 10,
+        }}
+      >
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+        <p>Loading pet details...</p>
+      </aside>
+    );
+  }
+
   if (!pet) return null;
 
-  const statusLabel = pet.reportStatus === "lost" ? "Lost" : "Found";
+  const statusLabel =
+    pet.reportStatus === "lost"
+      ? "Lost"
+      : pet.reportStatus === "found"
+        ? "Found"
+        : "Resolved";
   const photos = pet.photos ?? [];
   const currentPhoto = photos[photoIndex] ?? null;
 
@@ -138,6 +171,10 @@ export function PetDetailDrawer({
           <strong>{statusLabel}</strong> · {pet.species}
         </p>
 
+        <p style={{ color: "#6b7280", marginTop: -8 }}>
+          Reported {formatRelativeTime(pet.createdAt)}
+        </p>
+
         <p>{pet.breedLabel}</p>
         <p>{location}</p>
 
@@ -155,6 +192,26 @@ export function PetDetailDrawer({
               {pet.owner.firstName} {pet.owner.lastName}
             </p>
           </>
+        ) : null}
+
+        {onReportSighting && pet.reportStatus !== "resolved" ? (
+          <button
+            type="button"
+            onClick={onReportSighting}
+            style={{
+              marginTop: 16,
+              width: "100%",
+              border: 0,
+              borderRadius: 999,
+              padding: "12px 16px",
+              background: "#f97316",
+              color: "white",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Report sighting
+          </button>
         ) : null}
 
         {canDelete && pet.reportStatus !== "resolved" && onResolve ? (

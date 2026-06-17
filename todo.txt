@@ -1,8 +1,47 @@
 Setting up user accounts:
-  public browsing: anyone can view map/cards/details
-  auth/account system: sign up/login/session/profile
-  verification gate: verified users can post/message
-  create pet listing: requires account & verified status
-  upload pet photos: tied to listing owner
+  -public browsing: anyone can view map/cards/details
+  -auth/account system: sign up/login/session/profile
+  -verification gate: verified users can post/message
+  -create pet listing: requires account & verified status
+  -upload pet photos: tied to listing owner
   messaging: only verified users can start/reply
+  
+
+UI:
+  "zoom in to see pets" when too far out 
+  
+
+Security:
   moderation/admin tools: report listings/messages, remove abuse
+
+
+Tier 1:
+  persist map state in URL
+    current: spot.com
+    aftter moving: spot.com?lat=37.24&lng=-80.41&zoom=12
+    benefits:
+      share links, persist after refresh, deep linking works
+  map performance for 20k pets
+    breakdown where /api/pets/map returns id, name, species, status, lat, lng, thumbnail
+    then /api/pets/:id loads full details when card/drawer opens
+  image thumbnails (instead of full supabase image)
+
+
+Tier 2:
+  contact owner panel
+    in drawer: Reported by Hannah S. Blacksburg VA 
+    future: Message Owner
+  favorite reports
+    allow for users to check Blacksburg
+  report sightings
+    "I saw this pet" with location, date/time, notes, photos
+
+
+Tier 3:
+  realtime updates
+    when nearby pet reported: New lost dog reported nearby
+    no refresh required
+  chat
+    only after sightings exist
+  notifications
+    email & push

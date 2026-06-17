@@ -1,15 +1,18 @@
 import { apiGet } from "./client";
+import type { MapBounds } from "../types/map";
 import type {
-  MapBounds,
+  MapPet,
   MapPetsResponse,
   PetReportStatus,
   PetSpecies,
-} from "./types";
+  PetSortOption,
+} from "../types/pets";
 
 export type MapPetFilters = {
   species?: PetSpecies | "all";
   reportStatus?: PetReportStatus | "all";
   search?: string;
+  sort?: PetSortOption;
 };
 
 function clampLatitude(value: number) {
@@ -61,7 +64,29 @@ export function buildMapPetsQuery(
     params.set("search", filters.search.trim());
   }
 
+  if (filters.sort === "newest") {
+    params.set("sort", "createdAt");
+    params.set("order", "desc");
+  }
+
+  if (filters.sort === "oldest") {
+    params.set("sort", "createdAt");
+    params.set("order", "asc");
+  }
+
+  if (filters.sort === "name") {
+    params.set("sort", "name");
+    params.set("order", "asc");
+  }
+
   return params.toString();
+}
+
+export async function fetchPetById(
+  petId: string,
+  signal?: AbortSignal,
+): Promise<MapPet> {
+  return apiGet<MapPet>(`/api/pets/${petId}`, signal);
 }
 
 export async function fetchMapPets(
@@ -71,8 +96,5 @@ export async function fetchMapPets(
 ): Promise<MapPetsResponse> {
   const query = buildMapPetsQuery(bounds, filters);
 
-  return apiGet<MapPetsResponse>(
-    `/api/pets/map?${query}`,
-    signal,
-  );
+  return apiGet<MapPetsResponse>(`/api/pets/map?${query}`, signal);
 }

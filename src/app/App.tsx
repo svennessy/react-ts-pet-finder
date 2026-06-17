@@ -1,13 +1,19 @@
-import { Navigate, Route, Routes } from "react-router-dom";
-import { AuthPage } from "../features/auth/AuthPage";
-import { NearbyPage } from "../features/nearby/NearbyPage";
+import { Route, Routes } from "react-router-dom";
+import { AppLayout } from "../components/layout/AppLayout";
+import { BulletinPage } from "../pages/BulletinPage";
+import { HomePage } from "../pages/HomePage";
+import { NearbyPage } from "../pages/NearbyPage";
+import { AuthPage } from "../pages/AuthPage";
 
 export function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/nearby" replace />} />
-      <Route path="/nearby" element={<NearbyPage />} />
-      <Route path="/auth" element={<AuthPage />} />
+      <Route element={<AppLayout />}>
+        <Route index element={<HomePage />} />
+        <Route path="/nearby" element={<NearbyPage />} />
+        <Route path="/bulletin" element={<BulletinPage />} />
+        <Route path="/auth" element={<AuthPage />} />
+      </Route>
     </Routes>
   );
 }

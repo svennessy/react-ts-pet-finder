@@ -1,4 +1,4 @@
-import type { PostPetDraft } from "./types";
+import type { PostPetDraft } from "../../types/forms";
 import { PostPetLocationPicker } from "./PostPetLocationPicker";
 import { PostPetPhotoUpload } from "./PostPetPhotoUpload";
 

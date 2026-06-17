@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { signInWithEmail, signUpWithEmail } from "../../api/auth";
+import { signInWithEmail, signUpWithEmail } from "../api/auth";
 import { useNavigate } from "react-router-dom";
 
 export function AuthPage() {

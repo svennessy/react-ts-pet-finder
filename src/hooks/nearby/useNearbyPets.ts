@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchMapPets, type MapPetFilters } from "../../../api/pets";
-import type { MapBounds, MapPet } from "../../../api/types";
+import { fetchMapPets, type MapPetFilters } from "../../api/pets";
+import type { MapBounds } from "../../types/map";
+import type { MapPet } from "../../types/pets";
 
 type UseNearbyPetsResult = {
   pets: MapPet[];
@@ -70,6 +71,7 @@ export function useNearbyPets(
     filters.species,
     filters.reportStatus,
     filters.search,
+    filters.sort,
     reloadKey,
   ]);
 

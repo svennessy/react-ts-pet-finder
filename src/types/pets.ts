@@ -2,6 +2,8 @@ export type PetSpecies = "dog" | "cat" | "other";
 
 export type PetReportStatus = "lost" | "found" | "resolved";
 
+export type PetSortOption = "newest" | "oldest" | "name";
+
 export type PetPhoto = {
   id: number;
   petId: number;
@@ -26,6 +28,7 @@ export type MapPet = {
   cityName?: string | null;
   stateCode?: string | null;
   locationLabel?: string | null;
+  createdAt: string;
   photos?: PetPhoto[];
   owner?: {
     id: string;
@@ -43,11 +46,4 @@ export type MapPet = {
 export type MapPetsResponse = {
   pets: MapPet[];
   total: number;
-};
-
-export type MapBounds = {
-  north: number;
-  south: number;
-  east: number;
-  west: number;
 };

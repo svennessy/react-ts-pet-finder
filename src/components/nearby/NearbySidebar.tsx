@@ -1,4 +1,4 @@
-import type { MapPet } from "../../../api/types";
+import type { MapPet } from "../../types/pets";
 import { PetCard } from "./PetCard";
 
 type NearbySidebarProps = {

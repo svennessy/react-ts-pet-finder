@@ -3,9 +3,9 @@ import {
   createPetReport,
   deletePetReport,
   updatePetReport,
-} from "../../../api/postPets";
-import type { PostPetDraft } from "../../post-pet/types";
-import { uploadPetPhotos } from "../../../api/photos";
+} from "../../api/postPets";
+import type { PostPetDraft } from "../../types/forms";
+import { uploadPetPhotos } from "../../api/photos";
 
 type UsePetReportActionsParams = {
   reload: () => void | Promise<void>;
