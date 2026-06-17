@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { MapPet, PetPhoto } from "../../types/pets";
 import { formatRelativeTime } from "../../utils/nearby/formatRelativeTime";
 
@@ -22,6 +22,10 @@ function getPhotoUrl(photo: PetPhoto) {
 
 export function PetCard({ pet, selected, onSelect }: PetCardProps) {
   const [photoIndex, setPhotoIndex] = useState(0);
+
+  useEffect(() => {
+    setPhotoIndex(0);
+  }, [pet.id]);
 
   const statusLabel =
     pet.reportStatus === "lost"

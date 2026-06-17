@@ -25,6 +25,7 @@ type NearbyMapPanelProps = {
   selectedPetId: string | null;
   selectedPet: MapPet | null;
   userLocation: UserLocation | null;
+  loading?: boolean;
   onBoundsChange: (bounds: MapBounds) => void;
   onPetSelect: (petId: string | null) => void;
   onViewChange?: (view: {
@@ -34,7 +35,30 @@ type NearbyMapPanelProps = {
   }) => void;
 };
 
+function shouldStartNearUser() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("nearMe") === "1";
+}
+
+function hasValidUrlMapView() {
+  const params = new URLSearchParams(window.location.search);
+
+  const lat = Number(params.get("lat"));
+  const lng = Number(params.get("lng"));
+  const zoom = Number(params.get("zoom"));
+
+  return Number.isFinite(lat) && Number.isFinite(lng) && Number.isFinite(zoom);
+}
+
 function getInitialMapView(userLocation: UserLocation | null) {
+  if (shouldStartNearUser()) {
+    return {
+      latitude: userLocation?.latitude ?? 39.8283,
+      longitude: userLocation?.longitude ?? -98.5795,
+      zoom: userLocation ? 11 : 4,
+    };
+  }
+
   const params = new URLSearchParams(window.location.search);
 
   const lat = Number(params.get("lat"));
@@ -61,6 +85,7 @@ function NearbyMapPanelBase({
   selectedPetId,
   selectedPet,
   userLocation,
+  loading = false,
   onBoundsChange,
   onPetSelect,
   onViewChange,
@@ -123,16 +148,21 @@ function NearbyMapPanelBase({
   }, [userLocation]);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const hasUrlView =
-      params.has("lat") && params.has("lng") && params.has("zoom");
-
-    if (hasUrlView) return;
     if (!userLocation) return;
     if (hasCenteredOnUserRef.current) return;
-
+  
+    if (!shouldStartNearUser() && hasValidUrlMapView()) return;
+  
     hasCenteredOnUserRef.current = true;
     recenterToUser();
+  
+    const params = new URLSearchParams(window.location.search);
+    params.delete("nearMe");
+    params.set("lat", userLocation.latitude.toFixed(5));
+    params.set("lng", userLocation.longitude.toFixed(5));
+    params.set("zoom", "11.00");
+  
+    window.history.replaceState(null, "", `?${params.toString()}`);
   }, [userLocation, recenterToUser]);
 
   useEffect(() => {
@@ -334,6 +364,38 @@ function NearbyMapPanelBase({
           </Popup>
         ) : null}
       </Map>
+
+      {loading ? (
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: 16,
+            transform: "translateX(-50%)",
+            zIndex: 8,
+            background: "white",
+            borderRadius: 999,
+            padding: "10px 14px",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            fontWeight: 700,
+          }}
+        >
+          <span
+            style={{
+              width: 16,
+              height: 16,
+              borderRadius: "50%",
+              border: "3px solid #d1d5db",
+              borderTopColor: "#2563eb",
+              display: "inline-block",
+            }}
+          />
+          Loading pets...
+        </div>
+      ) : null}
 
       {userLocation ? (
         <button

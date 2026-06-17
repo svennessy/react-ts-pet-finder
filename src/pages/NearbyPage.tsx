@@ -268,6 +268,7 @@ export function NearbyPage() {
           onBoundsChange={handleBoundsChange}
           onPetSelect={setSelectedPetId}
           onViewChange={handleMapViewChange}
+          loading={loading}
         />
 
         <PostPetButton
