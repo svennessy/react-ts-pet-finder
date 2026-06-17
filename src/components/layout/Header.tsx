@@ -1,4 +1,5 @@
 import { Link, NavLink } from "react-router-dom";
+import SpotFullWord from "../../assets/images/SpotFullWord.png";
 
 function navLinkStyle({ isActive }: { isActive: boolean }) {
   return {
@@ -29,14 +30,19 @@ export function Header() {
       <Link
         to="/"
         style={{
-          fontSize: 26,
-          fontWeight: 950,
-          color: "#2563eb",
-          textDecoration: "none",
-          letterSpacing: "-0.04em",
+          display: "flex",
+          alignItems: "center",
         }}
       >
-        Spot
+        <img
+          src={SpotFullWord}
+          alt="Spot"
+          style={{
+            height: 40,
+            width: "auto",
+            display: "block",
+          }}
+        />
       </Link>
 
       <div
@@ -60,7 +66,7 @@ export function Header() {
       </div>
 
       <nav style={{ display: "flex", gap: 18, alignItems: "center" }}>
-        <NavLink to="/nearby" style={navLinkStyle}>
+        <NavLink to="/nearby?nearMe=1" style={navLinkStyle}>
           Nearby
         </NavLink>
 
