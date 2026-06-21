@@ -18,6 +18,7 @@ import { usePostPetDraft } from "../hooks/nearby/usePostPetDraft";
 import { useSidebarPets } from "../hooks/nearby/useSidebarPets";
 import { useUserLocation } from "../hooks/nearby/useUserLocation";
 import type { MapBounds } from "../types/map";
+import { useSightingsActions } from "../hooks/nearby/useSightingsActions";
 
 export function NearbyPage() {
   const navigate = useNavigate();
@@ -92,6 +93,13 @@ export function NearbyPage() {
     },
     [updateBounds],
   );
+
+  const {
+    sightingOpen,
+    setSightingOpen,
+    savingSighting,
+    handleSubmitSighting,
+  } = useSightingsActions(selectedPet);
 
   function handleSelectPet(petId: string | null) {
     setSelectedPetId(petId);
@@ -281,19 +289,21 @@ export function NearbyPage() {
           postPetOpen={postPetOpen}
           postPetDraft={postPetDraft}
           editingPetId={editingPetId}
-          sightingOpen={false}
+          sightingOpen={sightingOpen}
           userLocation={userLocation.location}
           canDelete={Boolean(
             auth.isAuthenticated &&
-              profile?.isVerified &&
-              selectedPet?.owner?.email === profile?.email,
+            profile?.isVerified &&
+            selectedPet?.owner?.email === profile?.email,
           )}
           deletingPet={deletingPet}
           resolvingPet={resolvingPet}
           savingPost={savingPost}
           updatingPost={updatingPost}
-          savingSighting={false}
-          isFavorite={selectedPetId ? favorites.isFavorite(selectedPetId) : false}
+          savingSighting={savingSighting}
+          isFavorite={
+            selectedPetId ? favorites.isFavorite(selectedPetId) : false
+          }
           favoriteLoading={
             selectedPetId ? favorites.isPending(selectedPetId) : false
           }
@@ -302,13 +312,13 @@ export function NearbyPage() {
           onDeletePet={handleDeletePetReport}
           onEditPet={handleEditSelectedPet}
           onResolvePet={handleResolvePetReport}
-          onReportSighting={() => {}}
+          onReportSighting={() => setSightingOpen(true)}
           onChangePostPetDraft={setPostPetDraft}
           onClosePostPetModal={handleClosePostPetModal}
           onSubmitPetReport={handleSubmitPetReport}
           onDeleteExistingPhoto={handleDeleteExistingPhoto}
-          onCloseSightingModal={() => {}}
-          onSubmitSighting={async () => {}}
+          onCloseSightingModal={() => setSightingOpen(false)}
+          onSubmitSighting={handleSubmitSighting}
         />
       </div>
     </main>
