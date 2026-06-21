@@ -25,14 +25,8 @@ type NearbyMapPanelProps = {
   selectedPet: MapMarkerPet | null;
   userLocation: UserLocation | null;
   loading?: boolean;
-  centerOnUserKey?: string | null;
   onBoundsChange: (bounds: MapBounds) => void;
   onPetSelect: (petId: string | null) => void;
-  onViewChange?: (view: {
-    latitude: number;
-    longitude: number;
-    zoom: number;
-  }) => void;
   mapResizeKey?: string | number | boolean;
 };
 

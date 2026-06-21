@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { PetPhoto, SidebarPet } from "../../types/pets";
 import { FavoriteButton } from "../favorites/FavoriteButton";
 import { Badge } from "../ui/Badge";
@@ -24,6 +25,12 @@ export function PetCard({
   favoriteLoading = false,
   onToggleFavorite,
 }: PetCardProps) {
+  const [photoIndex, setPhotoIndex] = useState(0);
+
+  useEffect(() => {
+    setPhotoIndex(0);
+  }, [pet.id]);
+
   const statusLabel =
     pet.reportStatus === "lost"
       ? "Lost"
@@ -35,10 +42,23 @@ export function PetCard({
     return String(photo.petId) === String(pet.id);
   });
 
-  const currentPhoto = photos[0] ?? null;
+  const currentPhoto = photos[photoIndex] ?? null;
+  const hasMultiplePhotos = photos.length > 1;
 
   const location =
     pet.locationLabel || `${pet.latitude.toFixed(4)}, ${pet.longitude.toFixed(4)}`;
+
+  function showPreviousPhoto(event: React.MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+
+    setPhotoIndex((index) => (index === 0 ? photos.length - 1 : index - 1));
+  }
+
+  function showNextPhoto(event: React.MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+
+    setPhotoIndex((index) => (index === photos.length - 1 ? 0 : index + 1));
+  }
 
   return (
     <article
@@ -86,6 +106,77 @@ export function PetCard({
             No photo
           </div>
         )}
+
+        {hasMultiplePhotos ? (
+          <>
+            <button
+              type="button"
+              onClick={showPreviousPhoto}
+              aria-label="Previous pet photo"
+              style={{
+                position: "absolute",
+                left: 8,
+                top: "50%",
+                transform: "translateY(-50%)",
+                zIndex: 6,
+                width: 34,
+                height: 34,
+                border: 0,
+                borderRadius: 999,
+                background: "rgba(255,255,255,0.92)",
+                boxShadow: "0 4px 14px rgba(0,0,0,0.22)",
+                cursor: "pointer",
+                fontSize: 24,
+                lineHeight: 1,
+                fontWeight: 800,
+              }}
+            >
+              ‹
+            </button>
+
+            <button
+              type="button"
+              onClick={showNextPhoto}
+              aria-label="Next pet photo"
+              style={{
+                position: "absolute",
+                right: 8,
+                top: "50%",
+                transform: "translateY(-50%)",
+                zIndex: 6,
+                width: 34,
+                height: 34,
+                border: 0,
+                borderRadius: 999,
+                background: "rgba(255,255,255,0.92)",
+                boxShadow: "0 4px 14px rgba(0,0,0,0.22)",
+                cursor: "pointer",
+                fontSize: 24,
+                lineHeight: 1,
+                fontWeight: 800,
+              }}
+            >
+              ›
+            </button>
+
+            <div
+              style={{
+                position: "absolute",
+                right: 10,
+                bottom: 86,
+                zIndex: 6,
+                background: "rgba(0,0,0,0.68)",
+                color: "white",
+                padding: "4px 8px",
+                borderRadius: 999,
+                fontSize: 12,
+                fontWeight: 700,
+              }}
+            >
+              {photoIndex + 1}/{photos.length}
+            </div>
+          </>
+        ) : null}
 
         <div
           style={{
@@ -154,7 +245,7 @@ export function PetCard({
               position: "absolute",
               top: 8,
               right: 8,
-              zIndex: 5,
+              zIndex: 7,
             }}
           >
             <FavoriteButton
