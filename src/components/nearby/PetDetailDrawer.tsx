@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import type { MapPet, PetPhoto } from "../../types/pets";
+import type { PetDetail, PetPhoto } from "../../types/pets";
 import { formatRelativeTime } from "../../utils/nearby/formatRelativeTime";
 import { Badge } from "../ui/Badge";
 import { FavoriteButton } from "../favorites/FavoriteButton";
 
 type PetDetailDrawerProps = {
-  pet: MapPet | null;
+  pet: PetDetail | null;
   onClose: () => void;
   canDelete?: boolean;
   deleting?: boolean;

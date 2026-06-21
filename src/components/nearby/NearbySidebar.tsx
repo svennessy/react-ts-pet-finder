@@ -1,10 +1,10 @@
 import { useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { MapPet } from "../../types/pets";
+import type { SidebarPet } from "../../types/pets";
 import { PetCard } from "./PetCard";
 
 type NearbySidebarProps = {
-  pets: MapPet[];
+  pets: SidebarPet[];
   total: number;
   loading: boolean;
   error: string | null;

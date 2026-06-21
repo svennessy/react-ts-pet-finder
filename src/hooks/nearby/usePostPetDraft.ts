@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { PostPetDraft } from "../../types/forms";
-import type { MapPet } from "../../types/pets";
+import type { PetDetail } from "../../types/pets";
 
 export const DEFAULT_POST_PET_DRAFT: PostPetDraft = {
   reportStatus: "lost",
@@ -27,7 +27,7 @@ export function usePostPetDraft() {
     });
   }
 
-  function fillDraftFromPet(pet: MapPet) {
+  function fillDraftFromPet(pet: PetDetail) {
     setPostPetDraft({
       reportStatus: pet.reportStatus,
       species: pet.species,

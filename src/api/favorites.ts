@@ -1,7 +1,7 @@
 import { apiDelete, apiGet, apiPost } from "./client";
-import type { MapPet } from "../types/pets";
+import type { SidebarPet } from "../types/pets";
 
-export type FavoritePet = MapPet & {
+export type FavoritePet = SidebarPet & {
   favoriteId: string;
 };
 

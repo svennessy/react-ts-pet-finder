@@ -1,10 +1,10 @@
 import { Link } from "react-router-dom";
-import type { MapPet } from "../../types/pets";
+import type { SidebarPet } from "../../types/pets";
 import { FavoriteButton } from "../favorites/FavoriteButton";
 import { Card } from "../ui/Card";
 
 type RecentPetCardProps = {
-  pet: MapPet;
+  pet: SidebarPet;
   isFavorite?: boolean;
   favoriteLoading?: boolean;
   onFavoriteClick?: () => void | Promise<void>;

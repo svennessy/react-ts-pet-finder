@@ -1,14 +1,14 @@
 import type { PostPetDraft } from "../../types/forms";
 import type { UserLocation } from "../../types/map";
-import type { MapPet } from "../../types/pets";
+import type { PetDetail } from "../../types/pets";
 import { PostPetModal } from "../post-pet/PostPetModal";
 import { PetDetailDrawer } from "./PetDetailDrawer";
 import { ReportSightingModal } from "./ReportSightingModal";
 
 type NearbyModalsProps = {
   selectedPetId: string | null;
-  selectedPet: MapPet | null;
-  drawerPet: MapPet | null;
+  selectedPet: PetDetail | null;
+  drawerPet: PetDetail | null;
   postPetOpen: boolean;
   postPetDraft: PostPetDraft;
   editingPetId: string | null;

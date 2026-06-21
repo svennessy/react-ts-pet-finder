@@ -5,7 +5,7 @@ import {
   saveFavorite,
 } from "../../api/favorites";
 import type { FavoritePet } from "../../api/favorites";
-import type { MapPet } from "../../types/pets";
+import type { SidebarPet } from "../../types/pets";
 
 export function useFavorites() {
   const [favorites, setFavorites] = useState<FavoritePet[]>([]);
@@ -42,7 +42,7 @@ export function useFavorites() {
     [pendingPetIds],
   );
 
-  async function save(pet: MapPet) {
+  async function save(pet: SidebarPet) {
     const petId = pet.id;
 
     setPendingPetIds((current) => new Set(current).add(petId));

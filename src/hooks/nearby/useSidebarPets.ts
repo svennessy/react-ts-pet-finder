@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchSidebarPets, type MapPetFilters } from "../../api/pets";
 import type { MapBounds } from "../../types/map";
-import type { MapPet } from "../../types/pets";
+import type { SidebarPet } from "../../types/pets";
 
 type UseSidebarPetsResult = {
-  sidebarPets: MapPet[];
+  sidebarPets: SidebarPet[];
   sidebarTotal: number;
   sidebarLoading: boolean;
   sidebarError: string | null;
@@ -22,7 +22,7 @@ export function useSidebarPets(
   bounds: MapBounds | null,
   filters: MapPetFilters = {},
 ): UseSidebarPetsResult {
-  const [sidebarPets, setSidebarPets] = useState<MapPet[]>([]);
+  const [sidebarPets, setSidebarPets] = useState<SidebarPet[]>([]);
   const [sidebarTotal, setSidebarTotal] = useState(0);
   const [sidebarLoading, setSidebarLoading] = useState(false);
   const [sidebarError, setSidebarError] = useState<string | null>(null);

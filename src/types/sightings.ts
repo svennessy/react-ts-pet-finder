@@ -1,7 +1,7 @@
-import type { MapPet } from "./pets";
+import type { SidebarPet } from "./pets";
 
 export type BulletinSighting = PetSighting & {
-  pet: MapPet;
+  pet: SidebarPet;
 };
 
 export type PetSighting = {

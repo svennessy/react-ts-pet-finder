@@ -59,8 +59,6 @@ export type PetDetail = SidebarPet & {
   owner?: PetOwner;
 };
 
-export type MapPet = PetDetail;
-
 export type MapPetsResponse = {
   pets: MapMarkerPet[];
   total: number;

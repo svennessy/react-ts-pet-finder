@@ -1,18 +1,10 @@
-import type { MapPet, PetPhoto } from "../../types/pets";
+import type { PetPhoto, SidebarPet } from "../../types/pets";
 import { FavoriteButton } from "../favorites/FavoriteButton";
 import { Badge } from "../ui/Badge";
 import { formatRelativeTime } from "../../utils/nearby/formatRelativeTime";
 
 type PetCardProps = {
-  pet: MapPet & {
-    photos?: PetPhoto[];
-    owner?: {
-      city?: {
-        name: string;
-        stateCode: string;
-      };
-    };
-  };
+  pet: SidebarPet;
   selected: boolean;
   onSelect: (petId: string) => void;
   isFavorite?: boolean;
@@ -39,47 +31,14 @@ export function PetCard({
         ? "Found"
         : "Resolved";
 
-  const photos = (pet.photos ?? []).filter((photo) => {
-    if (!("petId" in photo)) return true;
+  const photos = pet.photos.filter((photo) => {
     return String(photo.petId) === String(pet.id);
   });
 
   const currentPhoto = photos[0] ?? null;
 
-  if (pet.id === "40015" || pet.id === "40016") {
-    console.log("IMAGE SRC", {
-      petId: pet.id,
-      name: pet.name,
-      photoCount: photos.length,
-      currentPhotoId: currentPhoto?.id,
-      currentPhotoPetId: currentPhoto?.petId,
-      currentPhotoPath:
-        currentPhoto?.resolvedUrl ??
-        currentPhoto?.imageUrl ??
-        currentPhoto?.imagePath,
-    });
-  }
-
-  if (pet.name === "Goose" || pet.name === "Willy") {
-    console.log("PET CARD RENDER", {
-      petId: pet.id,
-      name: pet.name,
-      photos: photos.map((photo) => ({
-        id: photo.id,
-        petId: photo.petId,
-        imagePath: photo.imagePath,
-        resolvedUrl: photo.resolvedUrl,
-        imageUrl: photo.imageUrl,
-      })),
-      currentPhoto,
-    });
-  }
-
   const location =
-    pet.locationLabel ||
-    (pet.owner?.city
-      ? `${pet.owner.city.name}, ${pet.owner.city.stateCode}`
-      : `${pet.latitude.toFixed(4)}, ${pet.longitude.toFixed(4)}`);
+    pet.locationLabel || `${pet.latitude.toFixed(4)}, ${pet.longitude.toFixed(4)}`;
 
   return (
     <article
@@ -172,9 +131,7 @@ export function PetCard({
               whiteSpace: "nowrap",
             }}
           >
-            {pet.species}
-            {pet.createdAt && <> · {formatRelativeTime(pet.createdAt)}</>}
-            {location && <> · {location}</>}
+            {pet.species} · {formatRelativeTime(pet.createdAt)} · {location}
           </p>
 
           <p

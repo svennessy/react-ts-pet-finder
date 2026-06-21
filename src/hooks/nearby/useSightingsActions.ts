@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createPetSighting } from "../../api/sightings";
-import type { MapPet } from "../../types/pets";
+import type { PetDetail } from "../../types/pets";
 
 type SubmitSightingValues = {
   latitude: number;
@@ -8,7 +8,7 @@ type SubmitSightingValues = {
   notes: string;
 };
 
-export function useSightingsActions(selectedPet: MapPet | null) {
+export function useSightingsActions(selectedPet: PetDetail | null) {
   const [sightingOpen, setSightingOpen] = useState(false);
   const [savingSighting, setSavingSighting] = useState(false);
 
