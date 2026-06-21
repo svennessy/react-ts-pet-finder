@@ -1,33 +1,37 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { deletePetPhoto } from "../api/photos";
 import { NearbyFilters } from "../components/nearby/NearbyFilters";
 import { NearbyMapPanel } from "../components/nearby/NearbyMapPanel";
+import { NearbyModals } from "../components/nearby/NearbyModals";
 import { NearbySidebar } from "../components/nearby/NearbySidebar";
-import { PetDetailDrawer } from "../components/nearby/PetDetailDrawer";
+import { PostPetButton } from "../components/post-pet/PostPetButton";
 import { useAuthSession } from "../hooks/auth/useAuthSession";
+import { useProfile } from "../hooks/auth/useProfile";
 import { useFavorites } from "../hooks/favorites/useFavorites";
 import { useMapBounds } from "../hooks/nearby/useMapBounds";
 import { useNearbyFilters } from "../hooks/nearby/useNearbyFilters";
 import { useNearbyPets } from "../hooks/nearby/useNearbyPets";
 import { usePetDetails } from "../hooks/nearby/usePetDetails";
+import { usePetReportActions } from "../hooks/nearby/usePetReportActions";
+import { usePostPetDraft } from "../hooks/nearby/usePostPetDraft";
 import { useSidebarPets } from "../hooks/nearby/useSidebarPets";
 import { useUserLocation } from "../hooks/nearby/useUserLocation";
 import type { MapBounds } from "../types/map";
-import { PostPetButton } from "../components/post-pet/PostPetButton";
-import { PostPetModal } from "../components/post-pet/PostPetModal";
-import { useProfile } from "../hooks/auth/useProfile";
-import { usePetReportActions } from "../hooks/nearby/usePetReportActions";
-import { usePostPetDraft } from "../hooks/nearby/usePostPetDraft";
 
 export function NearbyPage() {
   const navigate = useNavigate();
   const auth = useAuthSession();
+  const { profile, loading: profileLoading } = useProfile();
   const favorites = useFavorites();
 
   const { bounds, updateBounds } = useMapBounds();
   const userLocation = useUserLocation();
+
   const [selectedPetId, setSelectedPetId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [postPetOpen, setPostPetOpen] = useState(false);
+  const [editingPetId, setEditingPetId] = useState<string | null>(null);
 
   const {
     species,
@@ -39,7 +43,7 @@ export function NearbyPage() {
     filters,
   } = useNearbyFilters();
 
-  const { pets, loading: mapLoading } = useNearbyPets(bounds, filters);
+  const { pets, loading: mapLoading, reload } = useNearbyPets(bounds, filters);
 
   const {
     sidebarPets,
@@ -56,9 +60,30 @@ export function NearbyPage() {
   const { pet: selectedPet, loading: selectedPetLoading } =
     usePetDetails(selectedPetId);
 
+  const { postPetDraft, setPostPetDraft, resetPostPetDraft, fillDraftFromPet } =
+    usePostPetDraft();
+
+  const {
+    savingPost,
+    deletingPet,
+    updatingPost,
+    resolvingPet,
+    handleCreatePetReport,
+    handleDeletePetReport,
+    handleUpdatePetReport,
+    handleResolvePetReport,
+  } = usePetReportActions({
+    reload,
+    reloadSidebar,
+    setSelectedPetId,
+    setPostPetOpen,
+    resetDraft: resetPostPetDraft,
+  });
+
   const selectedMapPet =
     pets.find((pet) => pet.id === selectedPetId) ??
     sidebarPets.find((pet) => pet.id === selectedPetId) ??
+    selectedPet ??
     null;
 
   const handleBoundsChange = useCallback(
@@ -68,18 +93,17 @@ export function NearbyPage() {
     [updateBounds],
   );
 
-  const { profile, loading: profileLoading } = useProfile();
-  const { postPetDraft, setPostPetDraft, resetPostPetDraft } =
-    usePostPetDraft();
-  const [postPetOpen, setPostPetOpen] = useState(false);
+  function handleSelectPet(petId: string | null) {
+    setSelectedPetId(petId);
 
-  const { savingPost, handleCreatePetReport } = usePetReportActions({
-    reload: () => {},
-    reloadSidebar,
-    setSelectedPetId,
-    setPostPetOpen,
-    resetDraft: resetPostPetDraft,
-  });
+    if (petId) {
+      setSidebarCollapsed(true);
+    }
+  }
+
+  function handleCloseDrawer() {
+    setSelectedPetId(null);
+  }
 
   function handleOpenPostPetModal() {
     if (auth.loading || profileLoading) return;
@@ -97,21 +121,42 @@ export function NearbyPage() {
     setPostPetOpen(true);
   }
 
+  function handleEditSelectedPet() {
+    if (!selectedPet) return;
+
+    setEditingPetId(String(selectedPet.id));
+    fillDraftFromPet(selectedPet);
+    setPostPetOpen(true);
+  }
+
   function handleClosePostPetModal() {
     setPostPetOpen(false);
+    setEditingPetId(null);
     resetPostPetDraft();
   }
 
-  function handleSelectPet(petId: string | null) {
-    setSelectedPetId(petId);
-
-    if (petId) {
-      setSidebarCollapsed(true);
+  function handleSubmitPetReport() {
+    if (editingPetId) {
+      return handleUpdatePetReport(editingPetId, postPetDraft).finally(() => {
+        setEditingPetId(null);
+      });
     }
+
+    return handleCreatePetReport(postPetDraft);
   }
 
-  function handleCloseDrawer() {
-    setSelectedPetId(null);
+  async function handleDeleteExistingPhoto(photoId: number) {
+    await deletePetPhoto(photoId);
+
+    setPostPetDraft((draft) => ({
+      ...draft,
+      existingPhotos: draft.existingPhotos?.filter(
+        (photo) => photo.id !== photoId,
+      ),
+    }));
+
+    await reload();
+    await reloadSidebar();
   }
 
   async function handleToggleFavorite(petId: string) {
@@ -191,15 +236,28 @@ export function NearbyPage() {
           <button
             type="button"
             onClick={() => setSidebarCollapsed(false)}
+            aria-label="Open sidebar"
             style={{
               position: "absolute",
               left: 0,
               top: "50%",
               transform: "translateY(-50%)",
               zIndex: 9999,
+              width: 36,
+              height: 76,
+              border: "1px solid rgba(0,0,0,0.08)",
+              borderLeft: 0,
+              borderRadius: "0 16px 16px 0",
+              background: "rgba(255,255,255,0.96)",
+              backdropFilter: "blur(12px)",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
+              cursor: "pointer",
+              fontSize: 20,
+              fontWeight: 800,
+              color: "#374151",
             }}
           >
-            open
+            ❯
           </button>
         ) : null}
 
@@ -214,34 +272,43 @@ export function NearbyPage() {
           onPetSelect={handleSelectPet}
         />
 
-        <PetDetailDrawer
-          pet={selectedPet}
-          loading={Boolean(selectedPetId) && selectedPetLoading}
-          onClose={handleCloseDrawer}
-          canDelete={false}
-          deleting={false}
-          resolving={false}
-          isFavorite={
-            selectedPetId ? favorites.isFavorite(selectedPetId) : false
-          }
+        <PostPetButton onClick={handleOpenPostPetModal} />
+
+        <NearbyModals
+          selectedPetId={selectedPetId}
+          selectedPet={selectedPet}
+          drawerPet={selectedPet}
+          postPetOpen={postPetOpen}
+          postPetDraft={postPetDraft}
+          editingPetId={editingPetId}
+          sightingOpen={false}
+          userLocation={userLocation.location}
+          canDelete={Boolean(
+            auth.isAuthenticated &&
+              profile?.isVerified &&
+              selectedPet?.owner?.email === profile?.email,
+          )}
+          deletingPet={deletingPet}
+          resolvingPet={resolvingPet}
+          savingPost={savingPost}
+          updatingPost={updatingPost}
+          savingSighting={false}
+          isFavorite={selectedPetId ? favorites.isFavorite(selectedPetId) : false}
           favoriteLoading={
             selectedPetId ? favorites.isPending(selectedPetId) : false
           }
           onToggleFavorite={handleToggleFavorite}
-        />
-
-        <PostPetButton onClick={handleOpenPostPetModal} />
-
-        <PostPetModal
-          open={postPetOpen}
-          value={postPetDraft}
-          onChange={setPostPetDraft}
-          onClose={handleClosePostPetModal}
-          userLocation={userLocation.location}
-          onSubmit={() => handleCreatePetReport(postPetDraft)}
-          saving={savingPost}
-          mode="create"
-          onDeleteExistingPhoto={async () => {}}
+          onCloseDrawer={handleCloseDrawer}
+          onDeletePet={handleDeletePetReport}
+          onEditPet={handleEditSelectedPet}
+          onResolvePet={handleResolvePetReport}
+          onReportSighting={() => {}}
+          onChangePostPetDraft={setPostPetDraft}
+          onClosePostPetModal={handleClosePostPetModal}
+          onSubmitPetReport={handleSubmitPetReport}
+          onDeleteExistingPhoto={handleDeleteExistingPhoto}
+          onCloseSightingModal={() => {}}
+          onSubmitSighting={async () => {}}
         />
       </div>
     </main>
