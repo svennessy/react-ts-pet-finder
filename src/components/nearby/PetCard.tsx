@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
 import type { MapPet, PetPhoto } from "../../types/pets";
+import { FavoriteButton } from "../favorites/FavoriteButton";
+import { Badge } from "../ui/Badge";
 import { formatRelativeTime } from "../../utils/nearby/formatRelativeTime";
 
 type PetCardProps = {
@@ -14,27 +15,65 @@ type PetCardProps = {
   };
   selected: boolean;
   onSelect: (petId: string) => void;
+  isFavorite?: boolean;
+  favoriteLoading?: boolean;
+  onToggleFavorite?: (petId: string) => void | Promise<void>;
 };
 
 function getPhotoUrl(photo: PetPhoto) {
   return photo.resolvedUrl ?? photo.imageUrl ?? photo.imagePath;
 }
 
-export function PetCard({ pet, selected, onSelect }: PetCardProps) {
-  const [photoIndex, setPhotoIndex] = useState(0);
-
-  useEffect(() => {
-    setPhotoIndex(0);
-  }, [pet.id]);
-
+export function PetCard({
+  pet,
+  selected,
+  onSelect,
+  isFavorite = false,
+  favoriteLoading = false,
+  onToggleFavorite,
+}: PetCardProps) {
   const statusLabel =
     pet.reportStatus === "lost"
       ? "Lost"
       : pet.reportStatus === "found"
         ? "Found"
         : "Resolved";
-  const photos = pet.photos ?? [];
-  const currentPhoto = photos[photoIndex] ?? null;
+
+  const photos = (pet.photos ?? []).filter((photo) => {
+    if (!("petId" in photo)) return true;
+    return String(photo.petId) === String(pet.id);
+  });
+
+  const currentPhoto = photos[0] ?? null;
+
+  if (pet.id === "40015" || pet.id === "40016") {
+    console.log("IMAGE SRC", {
+      petId: pet.id,
+      name: pet.name,
+      photoCount: photos.length,
+      currentPhotoId: currentPhoto?.id,
+      currentPhotoPetId: currentPhoto?.petId,
+      currentPhotoPath:
+        currentPhoto?.resolvedUrl ??
+        currentPhoto?.imageUrl ??
+        currentPhoto?.imagePath,
+    });
+  }
+
+  if (pet.name === "Goose" || pet.name === "Willy") {
+    console.log("PET CARD RENDER", {
+      petId: pet.id,
+      name: pet.name,
+      photos: photos.map((photo) => ({
+        id: photo.id,
+        petId: photo.petId,
+        imagePath: photo.imagePath,
+        resolvedUrl: photo.resolvedUrl,
+        imageUrl: photo.imageUrl,
+      })),
+      currentPhoto,
+    });
+  }
 
   const location =
     pet.locationLabel ||
@@ -46,117 +85,128 @@ export function PetCard({ pet, selected, onSelect }: PetCardProps) {
     <article
       onClick={() => onSelect(pet.id)}
       style={{
-        border: selected ? "2px solid #2563eb" : "1px solid #ddd",
-        borderRadius: 14,
+        border: selected ? "2px solid #2563eb" : "1px solid #e5e7eb",
+        borderRadius: 16,
         overflow: "hidden",
         cursor: "pointer",
         background: "white",
-        marginBottom: 12,
+        margin: "0 8px 12px",
         boxShadow: selected
-          ? "0 8px 24px rgba(37, 99, 235, 0.25)"
-          : "0 2px 8px rgba(0,0,0,0.08)",
+          ? "0 8px 22px rgba(37, 99, 235, 0.2)"
+          : "0 2px 8px rgba(0,0,0,0.06)",
       }}
     >
-      {currentPhoto ? (
-        <div style={{ position: "relative" }}>
+      <div
+        style={{
+          position: "relative",
+          height: 230,
+          background: "#f3f4f6",
+          color: "#6b7280",
+        }}
+      >
+        {currentPhoto ? (
           <img
+            key={`${pet.id}-${currentPhoto.id}`}
             src={getPhotoUrl(currentPhoto)}
             alt={pet.name}
             style={{
               width: "100%",
-              height: 190,
+              height: "100%",
               objectFit: "cover",
               display: "block",
             }}
           />
+        ) : (
+          <div
+            style={{
+              height: "100%",
+              display: "grid",
+              placeItems: "center",
+            }}
+          >
+            No photo
+          </div>
+        )}
 
-          {photos.length > 1 ? (
-            <>
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setPhotoIndex((index) =>
-                    index === 0 ? photos.length - 1 : index - 1,
-                  );
-                }}
-                style={{
-                  position: "absolute",
-                  left: 8,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                }}
-              >
-                ‹
-              </button>
-
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setPhotoIndex((index) =>
-                    index === photos.length - 1 ? 0 : index + 1,
-                  );
-                }}
-                style={{
-                  position: "absolute",
-                  right: 8,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                }}
-              >
-                ›
-              </button>
-
-              <div
-                style={{
-                  position: "absolute",
-                  right: 8,
-                  bottom: 8,
-                  background: "rgba(0,0,0,0.65)",
-                  color: "white",
-                  padding: "3px 7px",
-                  borderRadius: 999,
-                  fontSize: 12,
-                }}
-              >
-                {photoIndex + 1}/{photos.length}
-              </div>
-            </>
-          ) : null}
-        </div>
-      ) : (
         <div
           style={{
-            height: 160,
-            display: "grid",
-            placeItems: "center",
-            background: "#f3f4f6",
-            color: "#6b7280",
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            padding: "44px 12px 12px",
+            background:
+              "linear-gradient(to top, rgba(0,0,0,0.82), rgba(0,0,0,0))",
+            color: "white",
           }}
         >
-          No photo
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              minWidth: 0,
+            }}
+          >
+            <Badge variant={pet.reportStatus}>{statusLabel}</Badge>
+
+            <strong
+              style={{
+                fontSize: 17,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {pet.name}
+            </strong>
+          </div>
+
+          <p
+            style={{
+              margin: "5px 0 0",
+              fontSize: 12,
+              opacity: 0.92,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {pet.species}
+            {pet.createdAt && <> · {formatRelativeTime(pet.createdAt)}</>}
+            {location && <> · {location}</>}
+          </p>
+
+          <p
+            style={{
+              margin: "4px 0 0",
+              fontSize: 13,
+              fontWeight: 700,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {pet.breedLabel}
+          </p>
         </div>
-      )}
 
-      <div style={{ padding: 14 }}>
-        <strong
-          style={{
-            color: pet.reportStatus === "lost" ? "#dc2626" : "#16a34a",
-          }}
-        >
-          {statusLabel}
-        </strong>
-
-        <h3 style={{ margin: "8px 0 4px" }}>{pet.name}</h3>
-
-        <p style={{ margin: "0 0 6px", color: "#6b7280", fontSize: 13 }}>
-          {statusLabel} • {formatRelativeTime(pet.createdAt)}
-        </p>
-
-        <p style={{ margin: 0 }}>{pet.breedLabel}</p>
-
-        <p style={{ margin: "6px 0 0", color: "#6b7280" }}>{location}</p>
+        {onToggleFavorite ? (
+          <div
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              zIndex: 5,
+            }}
+          >
+            <FavoriteButton
+              isFavorite={isFavorite}
+              loading={favoriteLoading}
+              onClick={() => onToggleFavorite(pet.id)}
+            />
+          </div>
+        ) : null}
       </div>
     </article>
   );

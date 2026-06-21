@@ -17,9 +17,11 @@ export function usePetDetails(petId: string | null) {
     const currentPetId = petId;
     const controller = new AbortController();
   
+    setPet(null); // important: prevents old pet/photo flash
+    setError(null);
+  
     async function loadPet() {
       setLoading(true);
-      setError(null);
   
       try {
         const result = await fetchPetById(currentPetId, controller.signal);

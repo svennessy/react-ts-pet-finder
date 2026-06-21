@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import type { MapPet, PetPhoto } from "../../types/pets";
 import { formatRelativeTime } from "../../utils/nearby/formatRelativeTime";
+import { Badge } from "../ui/Badge";
+import { FavoriteButton } from "../favorites/FavoriteButton";
 
 type PetDetailDrawerProps = {
   pet: MapPet | null;
@@ -13,10 +15,54 @@ type PetDetailDrawerProps = {
   resolving?: boolean;
   loading?: boolean;
   onReportSighting?: () => void;
+  isFavorite?: boolean;
+  favoriteLoading?: boolean;
+  onToggleFavorite?: (petId: string) => void | Promise<void>;
 };
+
+function DrawerCloseButton({ onClose }: { onClose: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClose}
+      aria-label="Close pet details"
+      style={{
+        position: "absolute",
+        top: 10,
+        right: 10,
+        width: 34,
+        height: 34,
+        border: 0,
+        borderRadius: 999,
+        background: "rgba(255,255,255,0.95)",
+        boxShadow: "0 4px 14px rgba(0,0,0,0.18)",
+        cursor: "pointer",
+        fontSize: 18,
+        fontWeight: 800,
+        lineHeight: 1,
+        zIndex: 20,
+      }}
+    >
+      ×
+    </button>
+  );
+}
 
 function getPhotoUrl(photo: PetPhoto) {
   return photo.resolvedUrl ?? photo.imageUrl ?? photo.imagePath;
+}
+
+function compactButtonStyle(background: string, disabled = false) {
+  return {
+    border: 0,
+    borderRadius: 999,
+    padding: "10px 12px",
+    background,
+    color: "white",
+    fontWeight: 700,
+    cursor: disabled ? "not-allowed" : "pointer",
+    fontSize: 14,
+  };
 }
 
 export function PetDetailDrawer({
@@ -30,6 +76,9 @@ export function PetDetailDrawer({
   resolving = false,
   loading = false,
   onReportSighting,
+  isFavorite = false,
+  favoriteLoading = false,
+  onToggleFavorite,
 }: PetDetailDrawerProps) {
   const [photoIndex, setPhotoIndex] = useState(0);
 
@@ -44,7 +93,7 @@ export function PetDetailDrawer({
           position: "absolute",
           right: 16,
           top: 16,
-          width: 360,
+          width: 420,
           background: "white",
           borderRadius: 16,
           padding: 16,
@@ -52,15 +101,15 @@ export function PetDetailDrawer({
           zIndex: 10,
         }}
       >
-        <button type="button" onClick={onClose}>
-          Close
-        </button>
+        <DrawerCloseButton onClose={onClose} />
         <p>Loading pet details...</p>
       </aside>
     );
   }
 
-  if (!pet) return null;
+  if (!pet?.id) return null;
+
+  const petId = String(pet.id);
 
   const statusLabel =
     pet.reportStatus === "lost"
@@ -68,6 +117,7 @@ export function PetDetailDrawer({
       : pet.reportStatus === "found"
         ? "Found"
         : "Resolved";
+
   const photos = pet.photos ?? [];
   const currentPhoto = photos[photoIndex] ?? null;
 
@@ -82,9 +132,9 @@ export function PetDetailDrawer({
       style={{
         position: "absolute",
         right: 16,
-        top: 16,
-        width: 360,
-        maxHeight: "calc(100vh - 32px)",
+        bottom: 16,
+        width: 420,
+        maxHeight: "70vh",
         overflow: "auto",
         background: "white",
         borderRadius: 16,
@@ -92,14 +142,17 @@ export function PetDetailDrawer({
         zIndex: 10,
       }}
     >
+      <DrawerCloseButton onClose={onClose} />
+
       {currentPhoto ? (
         <div style={{ position: "relative" }}>
           <img
+            key={`${petId}-${currentPhoto.id}-${getPhotoUrl(currentPhoto)}`}
             src={getPhotoUrl(currentPhoto)}
             alt={pet.name}
             style={{
               width: "100%",
-              height: 240,
+              height: 220,
               objectFit: "cover",
               display: "block",
             }}
@@ -161,132 +214,144 @@ export function PetDetailDrawer({
       ) : null}
 
       <div style={{ padding: 16 }}>
-        <button type="button" onClick={onClose}>
-          Close
-        </button>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            marginBottom: 8,
+          }}
+        >
+          <h2
+            style={{
+              margin: 0,
+              fontSize: 24,
+              lineHeight: 1.15,
+            }}
+          >
+            {pet.name}
+          </h2>
 
-        <h2>{pet.name}</h2>
+          {onToggleFavorite ? (
+            <FavoriteButton
+              isFavorite={isFavorite}
+              loading={favoriteLoading}
+              onClick={() => onToggleFavorite(petId)}
+            />
+          ) : null}
+        </div>
 
-        <p>
-          <strong>{statusLabel}</strong> · {pet.species}
-        </p>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexWrap: "wrap",
+            color: "#6b7280",
+            fontSize: 14,
+            marginBottom: 8,
+          }}
+        >
+          <Badge variant={pet.reportStatus}>{statusLabel}</Badge>
+          <span>{pet.species}</span>
 
-        <p style={{ color: "#6b7280", marginTop: -8 }}>
-          Reported {formatRelativeTime(pet.createdAt)}
-        </p>
+          {pet.createdAt ? (
+            <>
+              <span>•</span>
+              <span>{formatRelativeTime(pet.createdAt)}</span>
+            </>
+          ) : null}
+        </div>
 
-        <p>{pet.breedLabel}</p>
-        <p>{location}</p>
+        <p style={{ margin: "0 0 4px", fontWeight: 600 }}>{pet.breedLabel}</p>
+
+        <p style={{ margin: 0, color: "#6b7280" }}>{location}</p>
 
         {pet.description ? (
           <>
-            <h3>Description</h3>
-            <p>{pet.description}</p>
+            <h3 style={{ margin: "12px 0 4px", fontSize: 15 }}>Description</h3>
+            <p style={{ margin: 0, color: "#374151", lineHeight: 1.45 }}>
+              {pet.description}
+            </p>
           </>
         ) : null}
 
         {pet.owner ? (
           <>
-            <h3>Reported By</h3>
-            <p>
+            <h3 style={{ margin: "12px 0 4px", fontSize: 15 }}>Reported By</h3>
+            <p style={{ margin: 0, color: "#374151" }}>
               {pet.owner.firstName} {pet.owner.lastName}
             </p>
           </>
         ) : null}
 
-        {onReportSighting && pet.reportStatus !== "resolved" ? (
-          <button
-            type="button"
-            onClick={onReportSighting}
-            style={{
-              marginTop: 16,
-              width: "100%",
-              border: 0,
-              borderRadius: 999,
-              padding: "12px 16px",
-              background: "#f97316",
-              color: "white",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            Report sighting
-          </button>
-        ) : null}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 8,
+            marginTop: 14,
+          }}
+        >
+          {onReportSighting && pet.reportStatus !== "resolved" ? (
+            <button
+              type="button"
+              onClick={onReportSighting}
+              style={compactButtonStyle("#f97316")}
+            >
+              Report sighting
+            </button>
+          ) : null}
 
-        {canDelete && pet.reportStatus !== "resolved" && onResolve ? (
-          <button
-            type="button"
-            disabled={resolving}
-            onClick={() => {
-              const confirmed = window.confirm("Mark this report as resolved?");
+          {canDelete && pet.reportStatus !== "resolved" && onResolve ? (
+            <button
+              type="button"
+              disabled={resolving}
+              onClick={() => {
+                const confirmed = window.confirm(
+                  "Mark this report as resolved?",
+                );
 
-              if (confirmed) {
-                onResolve(pet.id);
-              }
-            }}
-            style={{
-              marginTop: 16,
-              width: "100%",
-              border: 0,
-              borderRadius: 999,
-              padding: "12px 16px",
-              background: "#16a34a",
-              color: "white",
-              fontWeight: 700,
-            }}
-          >
-            {resolving ? "Updating..." : "Mark resolved"}
-          </button>
-        ) : null}
-        {canDelete && onEdit ? (
-          <button
-            type="button"
-            onClick={onEdit}
-            style={{
-              marginTop: 16,
-              width: "100%",
-              border: 0,
-              borderRadius: 999,
-              padding: "12px 16px",
-              background: "#2563eb",
-              color: "white",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            Edit report
-          </button>
-        ) : null}
+                if (confirmed) {
+                  onResolve(petId);
+                }
+              }}
+              style={compactButtonStyle("#16a34a", resolving)}
+            >
+              {resolving ? "Updating..." : "Mark resolved"}
+            </button>
+          ) : null}
 
-        {canDelete && onDelete ? (
-          <button
-            type="button"
-            disabled={deleting}
-            onClick={() => {
-              const confirmed = window.confirm(
-                "Delete this pet report? This cannot be undone.",
-              );
+          {canDelete && onEdit ? (
+            <button
+              type="button"
+              onClick={onEdit}
+              style={compactButtonStyle("#2563eb")}
+            >
+              Edit report
+            </button>
+          ) : null}
 
-              if (confirmed) {
-                onDelete(pet.id);
-              }
-            }}
-            style={{
-              marginTop: 16,
-              width: "100%",
-              border: 0,
-              borderRadius: 999,
-              padding: "12px 16px",
-              background: "#dc2626",
-              color: "white",
-              fontWeight: 700,
-              cursor: deleting ? "not-allowed" : "pointer",
-            }}
-          >
-            {deleting ? "Deleting..." : "Delete report"}
-          </button>
-        ) : null}
+          {canDelete && onDelete ? (
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => {
+                const confirmed = window.confirm(
+                  "Delete this pet report? This cannot be undone.",
+                );
+
+                if (confirmed) {
+                  onDelete(petId);
+                }
+              }}
+              style={compactButtonStyle("#dc2626", deleting)}
+            >
+              {deleting ? "Deleting..." : "Delete report"}
+            </button>
+          ) : null}
+        </div>
       </div>
     </aside>
   );

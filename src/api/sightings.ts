@@ -1,7 +1,18 @@
 import { apiGet, apiPost } from "./client";
-import type { CreatePetSightingBody, PetSighting } from "../types/sightings";
+import type {
+  CreatePetSightingBody,
+  PetSighting,
+  BulletinSighting,
+} from "../types/sightings";
 
-export type { CreatePetSightingBody, PetSighting };
+export type { CreatePetSightingBody, PetSighting, BulletinSighting };
+
+export async function fetchRecentSightings(signal?: AbortSignal) {
+  return apiGet<{ sightings: BulletinSighting[]; total: number }>(
+    "/api/sightings/recent",
+    signal,
+  );
+}
 
 export async function fetchPetSightings(petId: string, signal?: AbortSignal) {
   return apiGet<{ sightings: PetSighting[] }>(

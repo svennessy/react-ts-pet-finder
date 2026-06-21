@@ -26,7 +26,11 @@ export function useNearbyPets(
   }, []);
 
   useEffect(() => {
-    if (!bounds) return;
+    if (!bounds) {
+      setPets([]);
+      setTotal(0);
+      return;
+    }
 
     const currentBounds = bounds;
     const currentFilters = filters;
@@ -58,9 +62,12 @@ export function useNearbyPets(
       }
     }
 
-    void loadPets();
+    const timeoutId = window.setTimeout(() => {
+      void loadPets();
+    }, 300);
 
     return () => {
+      window.clearTimeout(timeoutId);
       controller.abort();
     };
   }, [

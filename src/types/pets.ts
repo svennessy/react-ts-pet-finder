@@ -15,20 +15,20 @@ export type PetPhoto = {
 
 export type MapPet = {
   id: string;
-  name: string;
-  description: string;
+  name?: string;
+  description?: string;
   species: PetSpecies;
-  reportType: PetReportStatus;
+  reportType?: PetReportStatus;
   reportStatus: PetReportStatus;
-  breed: string;
-  breedLabel: string;
-  color: string;
+  breed?: string;
+  breedLabel?: string;
+  color?: string;
   latitude: number;
   longitude: number;
   cityName?: string | null;
   stateCode?: string | null;
   locationLabel?: string | null;
-  createdAt: string;
+  createdAt?: string;
   photos?: PetPhoto[];
   owner?: {
     id: string;

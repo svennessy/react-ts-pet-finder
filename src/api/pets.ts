@@ -15,32 +15,37 @@ export type MapPetFilters = {
   sort?: PetSortOption;
 };
 
+type SidebarPetsOptions = {
+  page?: number;
+  limit?: number;
+};
+
 function clampLatitude(value: number) {
   return Math.max(-85.051129, Math.min(85.051129, value));
 }
 
-function normalizeLongitude(value: number) {
-  let lng = value;
-
-  while (lng < -180) lng += 360;
-  while (lng > 180) lng -= 360;
-
-  return lng;
+function clampLongitude(value: number) {
+  return Math.max(-125, Math.min(-66, value));
 }
 
 function normalizeBounds(bounds: MapBounds): MapBounds {
+  const north = Math.min(50, Math.max(24, clampLatitude(bounds.north)));
+  const south = Math.min(50, Math.max(24, clampLatitude(bounds.south)));
+  const east = clampLongitude(bounds.east);
+  const west = clampLongitude(bounds.west);
+
   return {
-    north: clampLatitude(bounds.north),
-    south: clampLatitude(bounds.south),
-    east: normalizeLongitude(bounds.east),
-    west: normalizeLongitude(bounds.west),
+    north: Math.max(north, south),
+    south: Math.min(north, south),
+    east: Math.max(east, west),
+    west: Math.min(east, west),
   };
 }
 
 export function buildMapPetsQuery(
   bounds: MapBounds,
   filters: MapPetFilters = {},
-  limit = 250,
+  limit = 5000,
 ) {
   const safeBounds = normalizeBounds(bounds);
 
@@ -79,7 +84,7 @@ export function buildMapPetsQuery(
     params.set("order", "asc");
   }
 
-  return params.toString();
+  return params;
 }
 
 export async function fetchPetById(
@@ -94,7 +99,34 @@ export async function fetchMapPets(
   filters: MapPetFilters = {},
   signal?: AbortSignal,
 ): Promise<MapPetsResponse> {
-  const query = buildMapPetsQuery(bounds, filters);
+  const query = buildMapPetsQuery(bounds, filters, 5000);
 
-  return apiGet<MapPetsResponse>(`/api/pets/map?${query}`, signal);
+  return apiGet<MapPetsResponse>(`/api/pets/map?${query.toString()}`, signal);
+}
+
+export async function fetchSidebarPets(
+  bounds: MapBounds,
+  filters: MapPetFilters = {},
+  options: SidebarPetsOptions = {},
+  signal?: AbortSignal,
+): Promise<MapPetsResponse> {
+  const page = options.page ?? 1;
+  const limit = options.limit ?? 40;
+
+  const query = buildMapPetsQuery(bounds, filters, limit);
+
+  query.set("page", String(page));
+  query.set("limit", String(limit));
+
+  return apiGet<MapPetsResponse>(
+    `/api/pets/sidebar?${query.toString()}`,
+    signal,
+  );
+}
+
+export async function fetchRecentPets(signal?: AbortSignal) {
+  return apiGet<{
+    pets: MapPet[];
+    total: number;
+  }>("/api/pets?sort=createdAt&order=desc&page=1&limit=6", signal);
 }

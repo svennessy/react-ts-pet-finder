@@ -1,3 +1,9 @@
+import type { MapPet } from "./pets";
+
+export type BulletinSighting = PetSighting & {
+  pet: MapPet;
+};
+
 export type PetSighting = {
   id: string;
   petId: string;

@@ -12,7 +12,6 @@ import type { MapBounds } from "../../types/map";
 import type { MapPet } from "../../types/pets";
 
 const mapTilerKey = import.meta.env.VITE_MAPTILER_KEY;
-
 const mapTilerStyle = `https://api.maptiler.com/maps/hybrid/style.json?key=${mapTilerKey}`;
 
 type UserLocation = {
@@ -26,6 +25,7 @@ type NearbyMapPanelProps = {
   selectedPet: MapPet | null;
   userLocation: UserLocation | null;
   loading?: boolean;
+  centerOnUserKey?: string | null;
   onBoundsChange: (bounds: MapBounds) => void;
   onPetSelect: (petId: string | null) => void;
   onViewChange?: (view: {
@@ -33,46 +33,10 @@ type NearbyMapPanelProps = {
     longitude: number;
     zoom: number;
   }) => void;
+  mapResizeKey?: string | number | boolean;
 };
 
-function shouldStartNearUser() {
-  const params = new URLSearchParams(window.location.search);
-  return params.get("nearMe") === "1";
-}
-
-function hasValidUrlMapView() {
-  const params = new URLSearchParams(window.location.search);
-
-  const lat = Number(params.get("lat"));
-  const lng = Number(params.get("lng"));
-  const zoom = Number(params.get("zoom"));
-
-  return Number.isFinite(lat) && Number.isFinite(lng) && Number.isFinite(zoom);
-}
-
 function getInitialMapView(userLocation: UserLocation | null) {
-  if (shouldStartNearUser()) {
-    return {
-      latitude: userLocation?.latitude ?? 39.8283,
-      longitude: userLocation?.longitude ?? -98.5795,
-      zoom: userLocation ? 11 : 4,
-    };
-  }
-
-  const params = new URLSearchParams(window.location.search);
-
-  const lat = Number(params.get("lat"));
-  const lng = Number(params.get("lng"));
-  const zoom = Number(params.get("zoom"));
-
-  if (Number.isFinite(lat) && Number.isFinite(lng) && Number.isFinite(zoom)) {
-    return {
-      latitude: lat,
-      longitude: lng,
-      zoom,
-    };
-  }
-
   return {
     latitude: userLocation?.latitude ?? 39.8283,
     longitude: userLocation?.longitude ?? -98.5795,
@@ -88,20 +52,34 @@ function NearbyMapPanelBase({
   loading = false,
   onBoundsChange,
   onPetSelect,
-  onViewChange,
+  mapResizeKey,
 }: NearbyMapPanelProps) {
   const mapRef = useRef<MapRef | null>(null);
-  const lastFlownPetIdRef = useRef<string | null>(null);
-  const hasCenteredOnUserRef = useRef(false);
+  const moveTimeoutRef = useRef<number | null>(null);
+  const resizeTimeoutRef = useRef<number | null>(null);
+  const lastBoundsRef = useRef("");
+  const lastCenteredPetIdRef = useRef<string | null>(null);
+
+  const safePets = useMemo(() => {
+    return pets.filter((pet) => {
+      return (
+        Number.isFinite(pet.latitude) &&
+        Number.isFinite(pet.longitude) &&
+        pet.latitude >= 24 &&
+        pet.latitude <= 50 &&
+        pet.longitude >= -125 &&
+        pet.longitude <= -66
+      );
+    });
+  }, [pets]);
 
   const geojson = useMemo(() => {
     return {
       type: "FeatureCollection" as const,
-      features: pets.map((pet) => ({
+      features: safePets.map((pet) => ({
         type: "Feature" as const,
         properties: {
           id: pet.id,
-          name: pet.name,
           species: pet.species,
           reportStatus: pet.reportStatus,
           selected: pet.id === selectedPetId,
@@ -112,7 +90,7 @@ function NearbyMapPanelBase({
         },
       })),
     };
-  }, [pets, selectedPetId]);
+  }, [safePets, selectedPetId]);
 
   const updateBoundsFromMap = useCallback(() => {
     const map = mapRef.current;
@@ -120,66 +98,83 @@ function NearbyMapPanelBase({
 
     const bounds = map.getBounds();
 
+    const north = Math.min(bounds.getNorth(), 49.5);
+    const south = Math.max(bounds.getSouth(), 24);
+    const east = Math.min(bounds.getEast(), -66);
+    const west = Math.max(bounds.getWest(), -125);
+
+    if (north <= south || east <= west) return;
+
+    const key = [
+      north.toFixed(3),
+      south.toFixed(3),
+      east.toFixed(3),
+      west.toFixed(3),
+    ].join("|");
+
+    if (lastBoundsRef.current === key) return;
+
+    lastBoundsRef.current = key;
+
     onBoundsChange({
-      north: bounds.getNorth(),
-      south: bounds.getSouth(),
-      east: bounds.getEast(),
-      west: bounds.getWest(),
+      north,
+      south,
+      east,
+      west,
     });
+  }, [onBoundsChange]);
 
-    onViewChange?.({
-      latitude: map.getCenter().lat,
-      longitude: map.getCenter().lng,
-      zoom: map.getZoom(),
-    });
-  }, [onBoundsChange, onViewChange]);
+  const scheduleBoundsUpdate = useCallback(() => {
+    if (moveTimeoutRef.current) {
+      window.clearTimeout(moveTimeoutRef.current);
+    }
 
-  const recenterToUser = useCallback(() => {
-    if (!userLocation) return;
-
-    const map = mapRef.current;
-    if (!map) return;
-
-    map.easeTo({
-      center: [userLocation.longitude, userLocation.latitude],
-      zoom: 11,
-      duration: 700,
-    });
-  }, [userLocation]);
+    moveTimeoutRef.current = window.setTimeout(() => {
+      updateBoundsFromMap();
+    }, 250);
+  }, [updateBoundsFromMap]);
 
   useEffect(() => {
-    if (!userLocation) return;
-    if (hasCenteredOnUserRef.current) return;
+    if (!selectedPet?.id) return;
+    if (lastCenteredPetIdRef.current === selectedPet.id) return;
   
-    if (!shouldStartNearUser() && hasValidUrlMapView()) return;
+    lastCenteredPetIdRef.current = selectedPet.id;
   
-    hasCenteredOnUserRef.current = true;
-    recenterToUser();
-  
-    const params = new URLSearchParams(window.location.search);
-    params.delete("nearMe");
-    params.set("lat", userLocation.latitude.toFixed(5));
-    params.set("lng", userLocation.longitude.toFixed(5));
-    params.set("zoom", "11.00");
-  
-    window.history.replaceState(null, "", `?${params.toString()}`);
-  }, [userLocation, recenterToUser]);
-
-  useEffect(() => {
-    if (!selectedPet) return;
-    if (lastFlownPetIdRef.current === selectedPet.id) return;
-
-    lastFlownPetIdRef.current = selectedPet.id;
-
-    const map = mapRef.current;
-    if (!map) return;
-
-    map.easeTo({
+    mapRef.current?.easeTo({
       center: [selectedPet.longitude, selectedPet.latitude],
-      zoom: Math.max(map.getZoom(), 12),
-      duration: 600,
+      zoom: Math.max(mapRef.current.getZoom(), 13),
+      duration: 450,
     });
-  }, [selectedPet?.id, selectedPet]);
+  }, [selectedPet?.id, selectedPet?.latitude, selectedPet?.longitude]);
+
+  useEffect(() => {
+    if (resizeTimeoutRef.current) {
+      window.clearTimeout(resizeTimeoutRef.current);
+    }
+
+    resizeTimeoutRef.current = window.setTimeout(() => {
+      mapRef.current?.resize();
+      updateBoundsFromMap();
+    }, 260);
+
+    return () => {
+      if (resizeTimeoutRef.current) {
+        window.clearTimeout(resizeTimeoutRef.current);
+      }
+    };
+  }, [mapResizeKey, updateBoundsFromMap]);
+
+  useEffect(() => {
+    return () => {
+      if (moveTimeoutRef.current) {
+        window.clearTimeout(moveTimeoutRef.current);
+      }
+
+      if (resizeTimeoutRef.current) {
+        window.clearTimeout(resizeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleMapClick = useCallback(
     (event: maplibregl.MapLayerMouseEvent) => {
@@ -242,6 +237,9 @@ function NearbyMapPanelBase({
       <Map
         ref={mapRef}
         mapLib={maplibregl}
+        minZoom={4}
+        maxZoom={18}
+        renderWorldCopies={false}
         initialViewState={{
           longitude: initialView.longitude,
           latitude: initialView.latitude,
@@ -251,7 +249,7 @@ function NearbyMapPanelBase({
         interactiveLayerIds={["clusters", "unclustered-pets", "selected-pets"]}
         onClick={handleMapClick}
         onLoad={updateBoundsFromMap}
-        onIdle={updateBoundsFromMap}
+        onMoveEnd={scheduleBoundsUpdate}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
@@ -347,7 +345,7 @@ function NearbyMapPanelBase({
           />
         </Source>
 
-        {selectedPet ? (
+        {selectedPet?.name ? (
           <Popup
             longitude={selectedPet.longitude}
             latitude={selectedPet.latitude}
@@ -358,8 +356,8 @@ function NearbyMapPanelBase({
           >
             <strong>{selectedPet.name}</strong>
             <p style={{ margin: "4px 0 0" }}>
-              {selectedPet.reportStatus} · {selectedPet.species} ·{" "}
-              {selectedPet.breedLabel}
+              {selectedPet.reportStatus} · {selectedPet.species}
+              {selectedPet.breedLabel ? ` · ${selectedPet.breedLabel}` : ""}
             </p>
           </Popup>
         ) : null}
@@ -383,40 +381,8 @@ function NearbyMapPanelBase({
             fontWeight: 700,
           }}
         >
-          <span
-            style={{
-              width: 16,
-              height: 16,
-              borderRadius: "50%",
-              border: "3px solid #d1d5db",
-              borderTopColor: "#2563eb",
-              display: "inline-block",
-            }}
-          />
           Loading pets...
         </div>
-      ) : null}
-
-      {userLocation ? (
-        <button
-          type="button"
-          onClick={recenterToUser}
-          style={{
-            position: "absolute",
-            right: 16,
-            bottom: 32,
-            zIndex: 5,
-            border: 0,
-            borderRadius: 999,
-            padding: "10px 14px",
-            background: "white",
-            fontWeight: 700,
-            cursor: "pointer",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
-          }}
-        >
-          Near me
-        </button>
       ) : null}
     </div>
   );
