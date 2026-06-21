@@ -87,11 +87,11 @@ export function NearbyPage() {
     resetDraft: resetPostPetDraft,
   });
 
-  const selectedMapPet =
-    pets.find((pet) => pet.id === selectedPetId) ??
-    sidebarPets.find((pet) => pet.id === selectedPetId) ??
-    selectedPet ??
-    null;
+  const selectedMarkerPet =
+    pets.find((pet) => pet.id === selectedPetId) ?? null;
+
+  const selectedFavoritePet =
+    sidebarPets.find((pet) => pet.id === selectedPetId) ?? selectedPet ?? null;
 
   const handleBoundsChange = useCallback(
     (nextBounds: MapBounds) => {
@@ -179,8 +179,7 @@ export function NearbyPage() {
 
     const petToSave =
       sidebarPets.find((pet) => pet.id === petId) ??
-      selectedPet ??
-      selectedMapPet;
+      selectedFavoritePet;
 
     if (!petToSave) return;
 
@@ -271,7 +270,7 @@ export function NearbyPage() {
         <NearbyMapPanel
           pets={pets}
           selectedPetId={selectedPetId}
-          selectedPet={selectedMapPet}
+          selectedPet={selectedMarkerPet}
           userLocation={userLocation.location}
           loading={mapLoading}
           mapResizeKey={sidebarCollapsed}
@@ -292,15 +291,17 @@ export function NearbyPage() {
           userLocation={userLocation.location}
           canDelete={Boolean(
             auth.isAuthenticated &&
-              profile?.isVerified &&
-              selectedPet?.owner?.email === profile?.email,
+            profile?.isVerified &&
+            selectedPet?.owner?.email === profile?.email,
           )}
           deletingPet={deletingPet}
           resolvingPet={resolvingPet}
           savingPost={savingPost}
           updatingPost={updatingPost}
           savingSighting={savingSighting}
-          isFavorite={selectedPetId ? favorites.isFavorite(selectedPetId) : false}
+          isFavorite={
+            selectedPetId ? favorites.isFavorite(selectedPetId) : false
+          }
           favoriteLoading={
             selectedPetId ? favorites.isPending(selectedPetId) : false
           }

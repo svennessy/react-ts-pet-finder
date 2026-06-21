@@ -11,39 +11,66 @@ export type PetPhoto = {
   imageUrl?: string;
   resolvedUrl?: string;
   sortOrder: number;
+  stanfordInstanceKey?: string | null;
+  createdAt?: string;
 };
 
-export type MapPet = {
+export type PetOwner = {
   id: string;
-  name?: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  city: {
+    name: string;
+    stateCode: string;
+    stateName: string;
+  };
+};
+
+export type MapMarkerPet = {
+  id: string;
+  species: PetSpecies;
+  reportType?: PetReportStatus;
+  reportStatus: PetReportStatus;
+  latitude: number;
+  longitude: number;
+};
+
+export type SidebarPet = {
+  id: string;
+  name: string;
   description?: string;
   species: PetSpecies;
   reportType?: PetReportStatus;
   reportStatus: PetReportStatus;
   breed?: string;
-  breedLabel?: string;
+  breedLabel: string;
   color?: string;
   latitude: number;
   longitude: number;
   cityName?: string | null;
   stateCode?: string | null;
   locationLabel?: string | null;
-  createdAt?: string;
-  photos?: PetPhoto[];
-  owner?: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    city: {
-      name: string;
-      stateCode: string;
-      stateName: string;
-    };
-  };
+  createdAt: string;
+  photos: PetPhoto[];
 };
 
+export type PetDetail = SidebarPet & {
+  owner?: PetOwner;
+};
+
+export type MapPet = PetDetail;
+
 export type MapPetsResponse = {
-  pets: MapPet[];
+  pets: MapMarkerPet[];
   total: number;
 };
+
+export type SidebarPetsResponse = {
+  pets: SidebarPet[];
+  total: number;
+  page?: number;
+  limit?: number;
+};
+
+export type PetDetailResponse = PetDetail;

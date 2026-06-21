@@ -9,7 +9,7 @@ import Map, {
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { MapBounds } from "../../types/map";
-import type { MapPet } from "../../types/pets";
+import type { MapMarkerPet } from "../../types/pets";
 
 const mapTilerKey = import.meta.env.VITE_MAPTILER_KEY;
 const mapTilerStyle = `https://api.maptiler.com/maps/hybrid/style.json?key=${mapTilerKey}`;
@@ -20,9 +20,9 @@ type UserLocation = {
 };
 
 type NearbyMapPanelProps = {
-  pets: MapPet[];
+  pets: MapMarkerPet[];
   selectedPetId: string | null;
-  selectedPet: MapPet | null;
+  selectedPet: MapMarkerPet | null;
   userLocation: UserLocation | null;
   loading?: boolean;
   centerOnUserKey?: string | null;
@@ -137,9 +137,9 @@ function NearbyMapPanelBase({
   useEffect(() => {
     if (!selectedPet?.id) return;
     if (lastCenteredPetIdRef.current === selectedPet.id) return;
-  
+
     lastCenteredPetIdRef.current = selectedPet.id;
-  
+
     mapRef.current?.easeTo({
       center: [selectedPet.longitude, selectedPet.latitude],
       zoom: Math.max(mapRef.current.getZoom(), 13),
@@ -345,7 +345,7 @@ function NearbyMapPanelBase({
           />
         </Source>
 
-        {selectedPet?.name ? (
+        {selectedPet ? (
           <Popup
             longitude={selectedPet.longitude}
             latitude={selectedPet.latitude}
@@ -354,11 +354,14 @@ function NearbyMapPanelBase({
             closeOnClick={false}
             onClose={() => onPetSelect(null)}
           >
-            <strong>{selectedPet.name}</strong>
-            <p style={{ margin: "4px 0 0" }}>
-              {selectedPet.reportStatus} · {selectedPet.species}
-              {selectedPet.breedLabel ? ` · ${selectedPet.breedLabel}` : ""}
-            </p>
+            <strong>
+              {selectedPet.reportStatus === "lost"
+                ? "Lost pet"
+                : selectedPet.reportStatus === "found"
+                  ? "Found pet"
+                  : "Resolved pet"}
+            </strong>
+            <p style={{ margin: "4px 0 0" }}>{selectedPet.species}</p>
           </Popup>
         ) : null}
       </Map>

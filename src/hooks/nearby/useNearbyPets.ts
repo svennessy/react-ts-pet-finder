@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchMapPets, type MapPetFilters } from "../../api/pets";
 import type { MapBounds } from "../../types/map";
-import type { MapPet } from "../../types/pets";
+import type { MapMarkerPet } from "../../types/pets";
 
 type UseNearbyPetsResult = {
-  pets: MapPet[];
+  pets: MapMarkerPet[];
   total: number;
   loading: boolean;
   error: string | null;
@@ -15,7 +15,7 @@ export function useNearbyPets(
   bounds: MapBounds | null,
   filters: MapPetFilters = {},
 ): UseNearbyPetsResult {
-  const [pets, setPets] = useState<MapPet[]>([]);
+  const [pets, setPets] = useState<MapMarkerPet[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

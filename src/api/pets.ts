@@ -1,12 +1,14 @@
 import { apiGet } from "./client";
 import type { MapBounds } from "../types/map";
 import type {
-  MapPet,
   MapPetsResponse,
+  PetDetail,
   PetReportStatus,
   PetSpecies,
   PetSortOption,
+  SidebarPetsResponse,
 } from "../types/pets";
+import type { SidebarPet } from "../types/pets";
 
 export type MapPetFilters = {
   species?: PetSpecies | "all";
@@ -90,8 +92,8 @@ export function buildMapPetsQuery(
 export async function fetchPetById(
   petId: string,
   signal?: AbortSignal,
-): Promise<MapPet> {
-  return apiGet<MapPet>(`/api/pets/${petId}`, signal);
+): Promise<PetDetail> {
+  return apiGet<PetDetail>(`/api/pets/${petId}`, signal);
 }
 
 export async function fetchMapPets(
@@ -109,7 +111,7 @@ export async function fetchSidebarPets(
   filters: MapPetFilters = {},
   options: SidebarPetsOptions = {},
   signal?: AbortSignal,
-): Promise<MapPetsResponse> {
+): Promise<SidebarPetsResponse> {
   const page = options.page ?? 1;
   const limit = options.limit ?? 40;
 
@@ -118,7 +120,7 @@ export async function fetchSidebarPets(
   query.set("page", String(page));
   query.set("limit", String(limit));
 
-  return apiGet<MapPetsResponse>(
+  return apiGet<SidebarPetsResponse>(
     `/api/pets/sidebar?${query.toString()}`,
     signal,
   );
@@ -126,7 +128,7 @@ export async function fetchSidebarPets(
 
 export async function fetchRecentPets(signal?: AbortSignal) {
   return apiGet<{
-    pets: MapPet[];
+    pets: SidebarPet[];
     total: number;
   }>("/api/pets?sort=createdAt&order=desc&page=1&limit=6", signal);
 }

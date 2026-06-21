@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { fetchRecentPets } from "../../api/pets";
-import type { MapPet } from "../../types/pets";
+import type { SidebarPet } from "../../types/pets";
 
 export function useRecentPets() {
-  const [pets, setPets] = useState<MapPet[]>([]);
+  const [pets, setPets] = useState<SidebarPet[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
