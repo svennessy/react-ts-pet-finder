@@ -31,8 +31,8 @@ export function usePostPetDraft() {
     setPostPetDraft({
       reportStatus: pet.reportStatus,
       species: pet.species,
-      name: pet.name,
-      breedLabel: pet.breedLabel,
+      name: pet.name ?? "",
+      breedLabel: pet.breedLabel ?? "",
       description: pet.description ?? "",
       latitude: pet.latitude,
       longitude: pet.longitude,

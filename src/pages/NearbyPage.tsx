@@ -16,9 +16,9 @@ import { usePetDetails } from "../hooks/nearby/usePetDetails";
 import { usePetReportActions } from "../hooks/nearby/usePetReportActions";
 import { usePostPetDraft } from "../hooks/nearby/usePostPetDraft";
 import { useSidebarPets } from "../hooks/nearby/useSidebarPets";
+import { useSightingsActions } from "../hooks/nearby/useSightingsActions";
 import { useUserLocation } from "../hooks/nearby/useUserLocation";
 import type { MapBounds } from "../types/map";
-import { useSightingsActions } from "../hooks/nearby/useSightingsActions";
 
 export function NearbyPage() {
   const navigate = useNavigate();
@@ -58,8 +58,14 @@ export function NearbyPage() {
     reloadSidebar,
   } = useSidebarPets(bounds, filters);
 
-  const { pet: selectedPet, loading: selectedPetLoading } =
-    usePetDetails(selectedPetId);
+  const { pet: selectedPet } = usePetDetails(selectedPetId);
+
+  const {
+    sightingOpen,
+    setSightingOpen,
+    savingSighting,
+    handleSubmitSighting,
+  } = useSightingsActions(selectedPet);
 
   const { postPetDraft, setPostPetDraft, resetPostPetDraft, fillDraftFromPet } =
     usePostPetDraft();
@@ -93,13 +99,6 @@ export function NearbyPage() {
     },
     [updateBounds],
   );
-
-  const {
-    sightingOpen,
-    setSightingOpen,
-    savingSighting,
-    handleSubmitSighting,
-  } = useSightingsActions(selectedPet);
 
   function handleSelectPet(petId: string | null) {
     setSelectedPetId(petId);
@@ -293,17 +292,15 @@ export function NearbyPage() {
           userLocation={userLocation.location}
           canDelete={Boolean(
             auth.isAuthenticated &&
-            profile?.isVerified &&
-            selectedPet?.owner?.email === profile?.email,
+              profile?.isVerified &&
+              selectedPet?.owner?.email === profile?.email,
           )}
           deletingPet={deletingPet}
           resolvingPet={resolvingPet}
           savingPost={savingPost}
           updatingPost={updatingPost}
           savingSighting={savingSighting}
-          isFavorite={
-            selectedPetId ? favorites.isFavorite(selectedPetId) : false
-          }
+          isFavorite={selectedPetId ? favorites.isFavorite(selectedPetId) : false}
           favoriteLoading={
             selectedPetId ? favorites.isPending(selectedPetId) : false
           }
