@@ -11,37 +11,43 @@ export function useUserLocation() {
   const [loading, setLoading] = useState(true);
 
   const requestLocation = useCallback(() => {
-    if (!navigator.geolocation) {
-      setError("Geolocation is not supported by this browser.");
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLocation({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
-
-        setError(null);
+    return new Promise<UserLocation | null>((resolve) => {
+      if (!navigator.geolocation) {
+        setError("Geolocation is not supported by this browser.");
         setLoading(false);
-      },
-      () => {
-        setError("Unable to get your location.");
-        setLoading(false);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10_000,
-      },
-    );
+        resolve(null);
+        return;
+      }
+
+      setLoading(true);
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const nextLocation = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          };
+
+          setLocation(nextLocation);
+          setError(null);
+          setLoading(false);
+          resolve(nextLocation);
+        },
+        () => {
+          setError("Unable to get your location.");
+          setLoading(false);
+          resolve(null);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10_000,
+        },
+      );
+    });
   }, []);
 
   useEffect(() => {
-    requestLocation();
+    void requestLocation();
   }, [requestLocation]);
 
   return {

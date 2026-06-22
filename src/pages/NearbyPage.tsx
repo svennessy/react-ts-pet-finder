@@ -33,6 +33,7 @@ export function NearbyPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [postPetOpen, setPostPetOpen] = useState(false);
   const [editingPetId, setEditingPetId] = useState<string | null>(null);
+  const [centerOnUserKey, setCenterOnUserKey] = useState(0);
 
   const {
     species,
@@ -178,12 +179,24 @@ export function NearbyPage() {
     }
 
     const petToSave =
-      sidebarPets.find((pet) => pet.id === petId) ??
-      selectedFavoritePet;
+      sidebarPets.find((pet) => pet.id === petId) ?? selectedFavoritePet;
 
     if (!petToSave) return;
 
     await favorites.save(petToSave);
+  }
+
+  async function handleCenterOnUser() {
+    const location =
+      userLocation.location ?? (await userLocation.requestLocation());
+
+    if (!location) {
+      alert(userLocation.error ?? "Unable to get your location.");
+      return;
+    }
+
+    setSelectedPetId(null);
+    setCenterOnUserKey((value) => value + 1);
   }
 
   return (
@@ -273,10 +286,35 @@ export function NearbyPage() {
           selectedPet={selectedMarkerPet}
           userLocation={userLocation.location}
           loading={mapLoading}
+          centerOnUserKey={centerOnUserKey}
           mapResizeKey={sidebarCollapsed}
           onBoundsChange={handleBoundsChange}
           onPetSelect={handleSelectPet}
         />
+
+        <button
+          type="button"
+          onClick={handleCenterOnUser}
+          disabled={userLocation.loading}
+          aria-label="Center map on my location"
+          style={{
+            position: "absolute",
+            right: 16,
+            top: 72,
+            zIndex: 9999,
+            width: 42,
+            height: 42,
+            borderRadius: 999,
+            border: "1px solid rgba(0,0,0,0.12)",
+            background: "rgba(255,255,255,0.96)",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
+            cursor: userLocation.loading ? "not-allowed" : "pointer",
+            fontSize: 18,
+            fontWeight: 800,
+          }}
+        >
+          ⌖
+        </button>
 
         <PostPetButton onClick={handleOpenPostPetModal} />
 

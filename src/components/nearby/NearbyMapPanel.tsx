@@ -25,6 +25,7 @@ type NearbyMapPanelProps = {
   selectedPet: MapMarkerPet | null;
   userLocation: UserLocation | null;
   loading?: boolean;
+  centerOnUserKey?: number;
   onBoundsChange: (bounds: MapBounds) => void;
   onPetSelect: (petId: string | null) => void;
   mapResizeKey?: string | number | boolean;
@@ -46,6 +47,7 @@ function NearbyMapPanelBase({
   loading = false,
   onBoundsChange,
   onPetSelect,
+  centerOnUserKey,
   mapResizeKey,
 }: NearbyMapPanelProps) {
   const mapRef = useRef<MapRef | null>(null);
@@ -140,6 +142,21 @@ function NearbyMapPanelBase({
       duration: 450,
     });
   }, [selectedPet?.id, selectedPet?.latitude, selectedPet?.longitude]);
+
+  useEffect(() => {
+    if (!centerOnUserKey || !userLocation) return;
+  
+    lastCenteredPetIdRef.current = null;
+  
+    const map = mapRef.current;
+    if (!map) return;
+  
+    map.easeTo({
+      center: [userLocation.longitude, userLocation.latitude],
+      zoom: Math.max(map.getZoom(), 11),
+      duration: 450,
+    });
+  }, [centerOnUserKey, userLocation]);
 
   useEffect(() => {
     if (resizeTimeoutRef.current) {
