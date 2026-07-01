@@ -130,6 +130,24 @@ function NearbyMapPanelBase({
     }, 250);
   }, [updateBoundsFromMap]);
 
+  const initialLocationCenteredRef = useRef(false);
+
+  useEffect(() => {
+    if (!userLocation) return;
+    if (initialLocationCenteredRef.current) return;
+
+    const map = mapRef.current;
+    if (!map) return;
+
+    initialLocationCenteredRef.current = true;
+
+    map.easeTo({
+      center: [userLocation.longitude, userLocation.latitude],
+      zoom: 11,
+      duration: 500,
+    });
+  }, [userLocation]);
+
   useEffect(() => {
     if (!selectedPet?.id) return;
     if (lastCenteredPetIdRef.current === selectedPet.id) return;
@@ -145,12 +163,12 @@ function NearbyMapPanelBase({
 
   useEffect(() => {
     if (!centerOnUserKey || !userLocation) return;
-  
+
     lastCenteredPetIdRef.current = null;
-  
+
     const map = mapRef.current;
     if (!map) return;
-  
+
     map.easeTo({
       center: [userLocation.longitude, userLocation.latitude],
       zoom: Math.max(map.getZoom(), 11),
