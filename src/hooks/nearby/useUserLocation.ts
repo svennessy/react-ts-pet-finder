@@ -1,16 +1,62 @@
 import { useCallback, useEffect, useState } from "react";
+import type { UserLocation } from "../../types/map";
 
-export type UserLocation = {
-  latitude: number;
-  longitude: number;
+const LAST_LOCATION_KEY = "pet-finder:last-user-location";
+
+export function hasCachedUserLocation() {
+  try {
+    return Boolean(sessionStorage.getItem(LAST_LOCATION_KEY));
+  } catch {
+    return false;
+  }
+}
+
+type LocationRequestOptions = {
+  highAccuracy?: boolean;
 };
 
-export function useUserLocation() {
-  const [location, setLocation] = useState<UserLocation | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+function readCachedLocation(): UserLocation | null {
+  try {
+    const raw = sessionStorage.getItem(LAST_LOCATION_KEY);
+    if (!raw) return null;
 
-  const requestLocation = useCallback(() => {
+    const parsed = JSON.parse(raw) as Partial<UserLocation>;
+    if (
+      typeof parsed.latitude === "number" &&
+      Number.isFinite(parsed.latitude) &&
+      typeof parsed.longitude === "number" &&
+      Number.isFinite(parsed.longitude)
+    ) {
+      return {
+        latitude: parsed.latitude,
+        longitude: parsed.longitude,
+      };
+    }
+  } catch {
+    // Ignore invalid cache entries.
+  }
+
+  return null;
+}
+
+function writeCachedLocation(location: UserLocation) {
+  try {
+    sessionStorage.setItem(LAST_LOCATION_KEY, JSON.stringify(location));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+export function useUserLocation() {
+  const [location, setLocation] = useState<UserLocation | null>(() =>
+    readCachedLocation(),
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(() => !readCachedLocation());
+
+  const requestLocation = useCallback((options: LocationRequestOptions = {}) => {
+    const highAccuracy = options.highAccuracy ?? false;
+
     return new Promise<UserLocation | null>((resolve) => {
       if (!navigator.geolocation) {
         setError("Geolocation is not supported by this browser.");
@@ -28,6 +74,7 @@ export function useUserLocation() {
             longitude: position.coords.longitude,
           };
 
+          writeCachedLocation(nextLocation);
           setLocation(nextLocation);
           setError(null);
           setLoading(false);
@@ -39,8 +86,9 @@ export function useUserLocation() {
           resolve(null);
         },
         {
-          enableHighAccuracy: true,
-          timeout: 10_000,
+          enableHighAccuracy: highAccuracy,
+          maximumAge: highAccuracy ? 0 : 5 * 60 * 1000,
+          timeout: highAccuracy ? 10_000 : 5_000,
         },
       );
     });

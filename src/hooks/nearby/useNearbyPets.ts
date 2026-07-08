@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchMapPets, type MapPetFilters } from "../../api/pets";
-import type { MapBounds } from "../../types/map";
+import { isFetchableMapBounds, type MapBounds } from "../../types/map";
 import type { MapMarkerPet } from "../../types/pets";
+import { hasCachedUserLocation } from "./useUserLocation";
 
 type UseNearbyPetsResult = {
   pets: MapMarkerPet[];
@@ -10,6 +11,14 @@ type UseNearbyPetsResult = {
   error: string | null;
   reload: () => void;
 };
+
+function shouldSkipColdStartWideFetch(bounds: MapBounds, hasLoaded: boolean) {
+  return (
+    !isFetchableMapBounds(bounds) &&
+    !hasLoaded &&
+    !hasCachedUserLocation()
+  );
+}
 
 export function useNearbyPets(
   bounds: MapBounds | null,
@@ -20,6 +29,7 @@ export function useNearbyPets(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const hasLoadedPetsRef = useRef(false);
 
   const reload = useCallback(() => {
     setReloadKey((value) => value + 1);
@@ -29,6 +39,11 @@ export function useNearbyPets(
     if (!bounds) {
       setPets([]);
       setTotal(0);
+      hasLoadedPetsRef.current = false;
+      return;
+    }
+
+    if (shouldSkipColdStartWideFetch(bounds, hasLoadedPetsRef.current)) {
       return;
     }
 
@@ -49,12 +64,11 @@ export function useNearbyPets(
 
         setPets(result.pets);
         setTotal(result.total);
+        hasLoadedPetsRef.current = true;
       } catch (err) {
         if (controller.signal.aborted) return;
 
         setError(err instanceof Error ? err.message : "Failed to load pets");
-        setPets([]);
-        setTotal(0);
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false);

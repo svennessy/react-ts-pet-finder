@@ -188,7 +188,8 @@ export function NearbyPage() {
 
   async function handleCenterOnUser() {
     const location =
-      userLocation.location ?? (await userLocation.requestLocation());
+      userLocation.location ??
+      (await userLocation.requestLocation({ highAccuracy: true }));
 
     if (!location) {
       alert(userLocation.error ?? "Unable to get your location.");

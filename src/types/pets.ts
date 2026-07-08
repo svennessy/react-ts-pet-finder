@@ -29,6 +29,7 @@ export type PetOwner = {
 
 export type MapMarkerPet = {
   id: string;
+  name: string;
   species: PetSpecies;
   reportType?: PetReportStatus;
   reportStatus: PetReportStatus;

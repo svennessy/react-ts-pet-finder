@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchSidebarPets, type MapPetFilters } from "../../api/pets";
-import type { MapBounds } from "../../types/map";
+import { isFetchableMapBounds, type MapBounds } from "../../types/map";
 import type { SidebarPet } from "../../types/pets";
+import { hasCachedUserLocation } from "./useUserLocation";
 
 type UseSidebarPetsResult = {
   sidebarPets: SidebarPet[];
@@ -18,6 +19,14 @@ type UseSidebarPetsResult = {
 
 const SIDEBAR_LIMIT = 40;
 
+function shouldSkipColdStartWideFetch(bounds: MapBounds, hasLoaded: boolean) {
+  return (
+    !isFetchableMapBounds(bounds) &&
+    !hasLoaded &&
+    !hasCachedUserLocation()
+  );
+}
+
 export function useSidebarPets(
   bounds: MapBounds | null,
   filters: MapPetFilters = {},
@@ -28,6 +37,7 @@ export function useSidebarPets(
   const [sidebarError, setSidebarError] = useState<string | null>(null);
   const [sidebarPage, setSidebarPage] = useState(1);
   const [reloadKey, setReloadKey] = useState(0);
+  const hasLoadedSidebarRef = useRef(false);
 
   const reloadSidebar = useCallback(() => {
     setReloadKey((value) => value + 1);
@@ -58,6 +68,11 @@ export function useSidebarPets(
     if (!bounds) {
       setSidebarPets([]);
       setSidebarTotal(0);
+      hasLoadedSidebarRef.current = false;
+      return;
+    }
+
+    if (shouldSkipColdStartWideFetch(bounds, hasLoadedSidebarRef.current)) {
       return;
     }
 
@@ -83,14 +98,13 @@ export function useSidebarPets(
 
         setSidebarPets(result.pets);
         setSidebarTotal(result.total);
+        hasLoadedSidebarRef.current = true;
       } catch (err) {
         if (controller.signal.aborted) return;
 
         setSidebarError(
           err instanceof Error ? err.message : "Failed to load sidebar pets",
         );
-        setSidebarPets([]);
-        setSidebarTotal(0);
       } finally {
         if (!controller.signal.aborted) {
           setSidebarLoading(false);

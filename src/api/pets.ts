@@ -1,6 +1,7 @@
 import { apiGet } from "./client";
 import type { MapBounds } from "../types/map";
 import type {
+  MapMarkerPet,
   MapPetsResponse,
   PetDetail,
   PetReportStatus,
@@ -96,6 +97,27 @@ export async function fetchPetById(
   return apiGet<PetDetail>(`/api/pets/${petId}`, signal);
 }
 
+function normalizeMapMarkerPet(pet: MapMarkerPet): MapMarkerPet {
+  return {
+    id: String(pet.id),
+    name: typeof pet.name === "string" && pet.name.length > 0 ? pet.name : "Pet",
+    species: pet.species,
+    reportStatus: pet.reportStatus,
+    latitude: Number(pet.latitude),
+    longitude: Number(pet.longitude),
+    ...(pet.reportType ? { reportType: pet.reportType } : {}),
+  };
+}
+
+function normalizeSidebarPet(pet: SidebarPet): SidebarPet {
+  return {
+    ...pet,
+    id: String(pet.id),
+    photos: Array.isArray(pet.photos) ? pet.photos : [],
+    breedLabel: pet.breedLabel ?? pet.breed ?? "Unknown",
+  };
+}
+
 export async function fetchMapPets(
   bounds: MapBounds,
   filters: MapPetFilters = {},
@@ -103,7 +125,15 @@ export async function fetchMapPets(
 ): Promise<MapPetsResponse> {
   const query = buildMapPetsQuery(bounds, filters, 5000);
 
-  return apiGet<MapPetsResponse>(`/api/pets/map?${query.toString()}`, signal);
+  const result = await apiGet<MapPetsResponse>(
+    `/api/pets/map?${query.toString()}`,
+    signal,
+  );
+
+  return {
+    pets: result.pets.map(normalizeMapMarkerPet),
+    total: result.total,
+  };
 }
 
 export async function fetchSidebarPets(
@@ -120,10 +150,18 @@ export async function fetchSidebarPets(
   query.set("page", String(page));
   query.set("limit", String(limit));
 
-  return apiGet<SidebarPetsResponse>(
+  const result = await apiGet<SidebarPetsResponse>(
     `/api/pets/sidebar?${query.toString()}`,
     signal,
   );
+
+  return {
+    ...result,
+    pets: result.pets.map(normalizeSidebarPet),
+    total: result.total,
+    page: result.page ?? page,
+    limit: result.limit ?? limit,
+  };
 }
 
 export async function fetchRecentPets(signal?: AbortSignal) {
