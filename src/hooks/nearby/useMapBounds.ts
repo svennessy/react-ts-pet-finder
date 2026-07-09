@@ -18,6 +18,7 @@ function boundsKey(bounds: MapBounds) {
     bounds.south.toFixed(2),
     bounds.east.toFixed(2),
     bounds.west.toFixed(2),
+    bounds.zoom?.toFixed(1) ?? "",
   ].join("|");
 }
 

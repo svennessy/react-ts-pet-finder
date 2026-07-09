@@ -16,17 +16,22 @@ import Map, {
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { MapBounds } from "../../types/map";
-import type { MapMarkerPet } from "../../types/pets";
+import { MAP_MIN_ZOOM } from "../../types/map";
+import type { MapCluster, MapMarkerPet } from "../../types/pets";
 
 const mapTilerKey = import.meta.env.VITE_MAPTILER_KEY;
 const mapTilerStyle = `https://api.maptiler.com/maps/hybrid/style.json?key=${mapTilerKey}`;
+
+const WHEEL_ZOOM_RATE = 1 / 650;
+const ZOOM_RATE = 1 / 220;
+const BOUNDS_SETTLE_MS = 300;
 
 const SPIDERFY_RADIUS_PIXELS = 54;
 const SPIDERFY_MIN_ZOOM = 12;
 const SPIDERFY_COLLAPSE_ZOOM = 11.5;
 const SPIDERFY_CIRCLE_POINTS = 72;
-const LOCATION_GROUP_DECIMALS = 4;
-const SAME_LOCATION_METERS = 25;
+const LOCATION_GROUP_DECIMALS = 3;
+const SPIDERFY_LOCATION_METERS = 50;
 
 type UserLocation = {
   latitude: number;
@@ -49,10 +54,13 @@ type DisplayPet = MapMarkerPet & {
 
 type NearbyMapPanelProps = {
   pets: MapMarkerPet[];
+  clusters?: MapCluster[];
   selectedPetId: string | null;
   selectedPet: MapMarkerPet | null;
   userLocation: UserLocation | null;
   loading?: boolean;
+  markerTotal?: number;
+  markerReturned?: number;
   centerOnUserKey?: number;
   onBoundsChange: (bounds: MapBounds) => void;
   onPetSelect: (petId: string | null) => void;
@@ -63,8 +71,14 @@ function getInitialMapView(userLocation: UserLocation | null) {
   return {
     latitude: userLocation?.latitude ?? 39.8283,
     longitude: userLocation?.longitude ?? -98.5795,
-    zoom: userLocation ? 11 : 4,
+    zoom: userLocation ? 11 : MAP_MIN_ZOOM,
   };
+}
+
+function configureScrollZoom(map: maplibregl.Map) {
+  map.scrollZoom.enable();
+  map.scrollZoom.setWheelZoomRate(WHEEL_ZOOM_RATE);
+  map.scrollZoom.setZoomRate(ZOOM_RATE);
 }
 
 function normalizeCoordinate(value: number | string) {
@@ -115,7 +129,11 @@ function distanceMeters(
   );
 }
 
-function shareSameLocation(left: MapMarkerPet, right: MapMarkerPet) {
+function shareNearbyLocation(
+  left: MapMarkerPet,
+  right: MapMarkerPet,
+  thresholdMeters: number,
+) {
   if (
     locationKey(left.latitude, left.longitude) ===
     locationKey(right.latitude, right.longitude)
@@ -129,26 +147,99 @@ function shareSameLocation(left: MapMarkerPet, right: MapMarkerPet) {
       left.longitude,
       right.latitude,
       right.longitude,
-    ) <= SAME_LOCATION_METERS
+    ) <= thresholdMeters
   );
 }
 
 function groupPetsBySameLocation(pets: MapMarkerPet[]) {
-  const groups: MapMarkerPet[][] = [];
+  if (pets.length === 0) return [];
+  return groupPetsByDistance(pets, SPIDERFY_LOCATION_METERS);
+}
 
-  for (const pet of pets) {
-    const existingGroup = groups.find((group) =>
-      shareSameLocation(group[0], pet),
-    );
-    if (existingGroup) {
-      existingGroup.push(pet);
-      continue;
+function groupPetsByDistance(pets: MapMarkerPet[], thresholdMeters: number) {
+  if (pets.length === 0) return [];
+
+  const parent = pets.map((_, index) => index);
+
+  const find = (index: number): number => {
+    let current = index;
+    while (parent[current] !== current) {
+      parent[current] = parent[parent[current]];
+      current = parent[current];
+    }
+    return current;
+  };
+
+  const union = (left: number, right: number) => {
+    const rootLeft = find(left);
+    const rootRight = find(right);
+    if (rootLeft !== rootRight) {
+      parent[rootRight] = rootLeft;
+    }
+  };
+
+  const cellSize = thresholdMeters / 111_000;
+  const grid = new globalThis.Map<string, number[]>();
+
+  for (let index = 0; index < pets.length; index += 1) {
+    const pet = pets[index];
+    const gridX = Math.floor(pet.latitude / cellSize);
+    const gridY = Math.floor(pet.longitude / cellSize);
+
+    for (let dx = -1; dx <= 1; dx += 1) {
+      for (let dy = -1; dy <= 1; dy += 1) {
+        const bucket = grid.get(`${gridX + dx}:${gridY + dy}`);
+        if (!bucket) continue;
+
+        for (const otherIndex of bucket) {
+          if (
+            shareNearbyLocation(pets[otherIndex], pet, thresholdMeters)
+          ) {
+            union(index, otherIndex);
+          }
+        }
+      }
     }
 
-    groups.push([pet]);
+    const homeKey = `${gridX}:${gridY}`;
+    const homeBucket = grid.get(homeKey) ?? [];
+    homeBucket.push(index);
+    grid.set(homeKey, homeBucket);
   }
 
-  return groups;
+  const grouped = new globalThis.Map<number, MapMarkerPet[]>();
+
+  for (let index = 0; index < pets.length; index += 1) {
+    const root = find(index);
+    const bucket = grouped.get(root) ?? [];
+    bucket.push(pets[index]);
+    grouped.set(root, bucket);
+  }
+
+  return [...grouped.values()];
+}
+
+/** Log-scaled so small New England clusters stay visible next to dense metros. */
+const CLUSTER_COUNT_RADIUS: maplibregl.ExpressionSpecification = [
+  "interpolate",
+  ["linear"],
+  ["ln", ["max", ["coalesce", ["get", "stackedCount"], 1], 1]],
+  Math.log(1),
+  16,
+  Math.log(10),
+  20,
+  Math.log(50),
+  24,
+  Math.log(200),
+  30,
+  Math.log(1000),
+  36,
+  Math.log(5000),
+  42,
+];
+
+function areCoLocatedForInteraction(left: MapMarkerPet, right: MapMarkerPet) {
+  return shareNearbyLocation(left, right, SPIDERFY_LOCATION_METERS);
 }
 
 function getSpiderfyRadiusPixels(count: number) {
@@ -294,10 +385,13 @@ function openStackFromPetIds(
 
 function NearbyMapPanelBase({
   pets,
+  clusters = [],
   selectedPetId,
   selectedPet,
   userLocation,
   loading = false,
+  markerTotal = 0,
+  markerReturned = 0,
   onBoundsChange,
   onPetSelect,
   centerOnUserKey,
@@ -313,6 +407,7 @@ function NearbyMapPanelBase({
 
   const [activeSpiderfyGroup, setActiveSpiderfyGroup] =
     useState<SpiderfyGroup | null>(null);
+  const [mapZoom, setMapZoom] = useState(MAP_MIN_ZOOM);
   const [mapViewKey, setMapViewKey] = useState(0);
 
   useEffect(() => {
@@ -368,12 +463,74 @@ function NearbyMapPanelBase({
     [safePets],
   );
 
+  const showAggregateClusters = clusters.length > 0;
+
+  useEffect(() => {
+    console.log("[map:panel] props", {
+      pets: pets.length,
+      clusters: clusters.length,
+      loading,
+      markerTotal,
+      markerReturned,
+      mapZoom,
+      showAggregateClusters,
+      sampleCluster: clusters[0] ?? null,
+    });
+  }, [
+    pets.length,
+    clusters,
+    loading,
+    markerTotal,
+    markerReturned,
+    mapZoom,
+    showAggregateClusters,
+  ]);
+
   const {
     displayPets,
     sharedLocationCircles,
     soloPetFeatures,
     stackFeatures,
   } = useMemo(() => {
+    if (showAggregateClusters) {
+      const validClusters = clusters.filter(
+        (cluster) =>
+          Number.isFinite(cluster.latitude) &&
+          Number.isFinite(cluster.longitude) &&
+          cluster.count > 0,
+      );
+
+      const features = validClusters.map((cluster) => ({
+        type: "Feature" as const,
+        properties: {
+          stackPetIds: cluster.samplePetId,
+          stackedCount: cluster.count,
+          reportStatus: cluster.reportStatus,
+        },
+        geometry: {
+          type: "Point" as const,
+          coordinates: [
+            Number(cluster.longitude),
+            Number(cluster.latitude),
+          ],
+        },
+      }));
+
+      console.log("[map:panel] building aggregate stack features", {
+        inputClusters: clusters.length,
+        validClusters: validClusters.length,
+        rejected: clusters.length - validClusters.length,
+        sampleFeature: features[0] ?? null,
+      });
+
+      return {
+        displayPets: [],
+        sharedLocationCircles: [],
+        soloPetFeatures: [],
+        stackFeatures: features,
+      };
+    }
+
     const map = mapRef.current?.getMap();
     const activeIds = new Set(activeSpiderfyGroup?.petIds ?? []);
     const nextDisplayPets: DisplayPet[] = [];
@@ -396,7 +553,8 @@ function NearbyMapPanelBase({
       const anchorPet = sortedPets[0];
       const groupPetIds = sortedPets.map((pet) => pet.id);
       const isActiveGroup =
-        sortedPets.length > 1 && groupPetIds.every((id) => activeIds.has(id));
+        sortedPets.length > 1 &&
+        groupPetIds.every((id) => activeIds.has(id));
 
       if (sortedPets.length === 1) {
         if (activeIds.has(anchorPet.id)) continue;
@@ -463,6 +621,11 @@ function NearbyMapPanelBase({
         continue;
       }
 
+      const stackPosition = {
+        latitude: anchorPet.latitude,
+        longitude: anchorPet.longitude,
+      };
+
       nextStackFeatures.push({
         type: "Feature",
         properties: {
@@ -472,7 +635,7 @@ function NearbyMapPanelBase({
         },
         geometry: {
           type: "Point",
-          coordinates: [anchorPet.longitude, anchorPet.latitude],
+          coordinates: [stackPosition.longitude, stackPosition.latitude],
         },
       });
     }
@@ -483,7 +646,17 @@ function NearbyMapPanelBase({
       soloPetFeatures: nextSoloPetFeatures,
       stackFeatures: nextStackFeatures,
     };
-  }, [activeSpiderfyGroup, locationGroups, mapViewKey, selectedPetId]);
+  }, [
+    activeSpiderfyGroup,
+    clusters,
+    locationGroups,
+    mapViewKey,
+    mapZoom,
+    selectedPetId,
+    showAggregateClusters,
+  ]);
+
+  const useMapLibreClustering = mapZoom >= SPIDERFY_MIN_ZOOM;
 
   useEffect(() => {
     if (!activeSpiderfyGroup) return;
@@ -519,11 +692,20 @@ function NearbyMapPanelBase({
   }, [selectedPetId, soloPetFeatures]);
 
   const stackGeojson = useMemo(() => {
-    return {
+    const geojson = {
       type: "FeatureCollection" as const,
       features: stackFeatures,
     };
-  }, [stackFeatures]);
+
+    console.log("[map:panel] stackGeojson", {
+      featureCount: geojson.features.length,
+      showAggregateClusters,
+      useMapLibreClustering: mapZoom >= SPIDERFY_MIN_ZOOM,
+      sample: geojson.features[0] ?? null,
+    });
+
+    return geojson;
+  }, [stackFeatures, showAggregateClusters, mapZoom]);
 
   const spiderfiedPetsGeojson = useMemo(() => {
     return {
@@ -590,6 +772,7 @@ function NearbyMapPanelBase({
       south.toFixed(3),
       east.toFixed(3),
       west.toFixed(3),
+      map.getZoom().toFixed(1),
     ].join("|");
 
     if (lastBoundsRef.current === key) return;
@@ -601,11 +784,13 @@ function NearbyMapPanelBase({
       south,
       east,
       west,
+      zoom: map.getZoom(),
     });
   }, [onBoundsChange]);
 
   const updateZoomFromMap = useCallback(() => {
     if (!mapRef.current) return;
+    setMapZoom(mapRef.current.getZoom());
     setMapViewKey((value) => value + 1);
   }, []);
 
@@ -618,15 +803,32 @@ function NearbyMapPanelBase({
       collapseSpiderfyIfNeeded();
       updateZoomFromMap();
       updateBoundsFromMap();
-    }, 250);
+    }, BOUNDS_SETTLE_MS);
   }, [collapseSpiderfyIfNeeded, updateBoundsFromMap, updateZoomFromMap]);
 
   const handleMapMove = useCallback(() => {
-    if (!activeSpiderfyGroupRef.current) return;
-    updateZoomFromMap();
-  }, [updateZoomFromMap]);
+    const map = mapRef.current;
+    if (!map) return;
+
+    const zoom = map.getZoom();
+    setMapZoom((current) =>
+      Math.abs(current - zoom) > 0.04 ? zoom : current,
+    );
+
+    if (activeSpiderfyGroupRef.current) {
+      setMapViewKey((value) => value + 1);
+    }
+  }, []);
 
   const handleMapLoad = useCallback(() => {
+    const map = mapRef.current?.getMap();
+    console.log("[map:panel] map loaded", {
+      hasMap: Boolean(map),
+      zoom: map?.getZoom(),
+      center: map?.getCenter(),
+      styleLoaded: map?.isStyleLoaded(),
+    });
+    if (map) configureScrollZoom(map);
     updateZoomFromMap();
     updateBoundsFromMap();
   }, [updateBoundsFromMap, updateZoomFromMap]);
@@ -728,18 +930,64 @@ function NearbyMapPanelBase({
         | maplibregl.GeoJSONSource
         | undefined;
 
-      const stackPetIds = features
-        .map((feature) => getStackPetIdsFromProperties(feature.properties))
-        .find((ids): ids is string[] => Boolean(ids && ids.length > 1));
+      const stackFeature = features.find(
+        (feature) =>
+          feature.layer?.id === "location-stacks" ||
+          feature.layer?.id === "location-stack-count",
+      );
 
-      if (stackPetIds) {
-        openStackFromPetIds(
-          stackPetIds,
-          safePets,
-          openSpiderfyGroup,
-          map?.getMap() ?? null,
+      if (stackFeature && map) {
+        const stackSource = map.getSource("location-stacks-source") as
+          | maplibregl.GeoJSONSource
+          | undefined;
+        const clusterId = stackFeature.properties?.cluster_id;
+
+        if (
+          showAggregateClusters &&
+          stackSource &&
+          clusterId !== undefined &&
+          clusterId !== null
+        ) {
+          void stackSource
+            .getClusterExpansionZoom(Number(clusterId))
+            .then((expansionZoom) => {
+              map.easeTo({
+                center: event.lngLat,
+                zoom: Math.min(expansionZoom, SPIDERFY_MIN_ZOOM),
+                duration: 400,
+              });
+            })
+            .catch(() => {
+              map.easeTo({
+                center: event.lngLat,
+                zoom: Math.min(map.getZoom() + 1, SPIDERFY_MIN_ZOOM),
+                duration: 400,
+              });
+            });
+          return;
+        }
+
+        if (showAggregateClusters || map.getZoom() < SPIDERFY_MIN_ZOOM) {
+          map.easeTo({
+            center: event.lngLat,
+            zoom: Math.min(map.getZoom() + 1, SPIDERFY_MIN_ZOOM),
+            duration: 400,
+          });
+          return;
+        }
+
+        const stackPetIds = getStackPetIdsFromProperties(
+          stackFeature.properties,
         );
-        return;
+        if (stackPetIds && stackPetIds.length > 1) {
+          openStackFromPetIds(
+            stackPetIds,
+            safePets,
+            openSpiderfyGroup,
+            map.getMap(),
+          );
+          return;
+        }
       }
 
       const clusterFeature = features.find(
@@ -762,7 +1010,9 @@ function NearbyMapPanelBase({
 
             if (
               clusterPets.length > 1 &&
-              clusterPets.every((pet) => shareSameLocation(clusterPets[0], pet))
+              clusterPets.every((pet) =>
+                areCoLocatedForInteraction(clusterPets[0], pet),
+              )
             ) {
               const anchorPet = clusterPets[0];
               openSpiderfyGroup(
@@ -811,7 +1061,7 @@ function NearbyMapPanelBase({
         }
 
         const overlappingPets = safePets
-          .filter((pet) => shareSameLocation(clickedPet, pet))
+          .filter((pet) => areCoLocatedForInteraction(clickedPet, pet))
           .sort((left, right) => left.id.localeCompare(right.id));
 
         if (
@@ -830,7 +1080,7 @@ function NearbyMapPanelBase({
         onPetSelect(id);
       }
     },
-    [activeSpiderfyGroup, onPetSelect, openSpiderfyGroup, safePets],
+    [activeSpiderfyGroup, onPetSelect, openSpiderfyGroup, safePets, showAggregateClusters],
   );
 
   const handleMouseEnter = useCallback(() => {
@@ -859,7 +1109,7 @@ function NearbyMapPanelBase({
       <Map
         ref={mapRef}
         mapLib={maplibregl}
-        minZoom={4}
+        minZoom={MAP_MIN_ZOOM}
         maxZoom={18}
         renderWorldCopies={false}
         initialViewState={{
@@ -928,38 +1178,83 @@ function NearbyMapPanelBase({
           />
         </Source>
 
-        <Source id="location-stacks-source" type="geojson" data={stackGeojson}>
+        <Source
+          id="location-stacks-source"
+          key={showAggregateClusters ? "aggregate-stacks" : "location-stacks"}
+          type="geojson"
+          data={stackGeojson}
+          cluster={showAggregateClusters}
+          clusterMaxZoom={SPIDERFY_MIN_ZOOM - 1}
+          clusterRadius={70}
+          clusterMinPoints={2}
+          clusterProperties={{
+            stackedCount: ["+", ["get", "stackedCount"]],
+          }}
+        >
           <Layer
             id="location-stacks"
             type="circle"
             paint={{
-              "circle-color": [
-                "case",
-                ["==", ["get", "reportStatus"], "lost"],
-                "#ef4444",
-                "#22c55e",
-              ],
-              "circle-radius": [
-                "step",
-                ["get", "stackedCount"],
-                16,
-                3,
-                20,
-                10,
-                24,
-              ],
+              "circle-color": showAggregateClusters
+                ? [
+                    "step",
+                    ["get", "stackedCount"],
+                    "#2563eb",
+                    25,
+                    "#7c3aed",
+                    100,
+                    "#dc2626",
+                  ]
+                : [
+                    "case",
+                    ["==", ["get", "reportStatus"], "lost"],
+                    "#ef4444",
+                    "#22c55e",
+                  ],
+              "circle-radius": showAggregateClusters
+                ? CLUSTER_COUNT_RADIUS
+                : [
+                    "step",
+                    ["coalesce", ["get", "stackedCount"], 1],
+                    16,
+                    3,
+                    20,
+                    10,
+                    24,
+                  ],
               "circle-opacity": 0.95,
               "circle-stroke-width": 3,
               "circle-stroke-color": "#ffffff",
             }}
           />
-
           <Layer
             id="location-stack-count"
             type="symbol"
             layout={{
-              "text-field": ["to-string", ["get", "stackedCount"]],
-              "text-size": 13,
+              "text-field": [
+                "to-string",
+                ["coalesce", ["get", "stackedCount"], 1],
+              ],
+              "text-size": showAggregateClusters
+                ? [
+                    "interpolate",
+                    ["linear"],
+                    [
+                      "ln",
+                      ["max", ["coalesce", ["get", "stackedCount"], 1], 1],
+                    ],
+                    Math.log(1),
+                    11,
+                    Math.log(25),
+                    12,
+                    Math.log(200),
+                    13,
+                    Math.log(1000),
+                    14,
+                    Math.log(5000),
+                    15,
+                  ]
+                : 13,
               "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
             }}
             paint={{
@@ -972,9 +1267,9 @@ function NearbyMapPanelBase({
           id="pets"
           type="geojson"
           data={petsGeojson}
-          cluster
+          cluster={useMapLibreClustering}
           clusterMaxZoom={SPIDERFY_MIN_ZOOM}
-          clusterRadius={48}
+          clusterRadius={50}
           promoteId="id"
         >
           <Layer
@@ -1115,6 +1410,28 @@ function NearbyMapPanelBase({
           </Popup>
         ) : null}
       </Map>
+
+      {markerTotal > 0 && !loading ? (
+        <div
+          style={{
+            position: "absolute",
+            left: 16,
+            top: 16,
+            zIndex: 8,
+            background: "rgba(255,255,255,0.96)",
+            borderRadius: 999,
+            padding: "8px 12px",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
+            fontSize: 13,
+            fontWeight: 700,
+            color: "#374151",
+          }}
+        >
+          {markerReturned >= markerTotal
+            ? `${markerTotal.toLocaleString()} pets on map`
+            : `${markerReturned.toLocaleString()} of ${markerTotal.toLocaleString()} pets on map`}
+        </div>
+      ) : null}
 
       {loading ? (
         <div

@@ -1,5 +1,6 @@
 import { apiGet } from "./client";
 import type { MapBounds } from "../types/map";
+import { getMapPetsFetchLimit } from "../types/map";
 import type {
   MapMarkerPet,
   MapPetsResponse,
@@ -48,7 +49,7 @@ function normalizeBounds(bounds: MapBounds): MapBounds {
 export function buildMapPetsQuery(
   bounds: MapBounds,
   filters: MapPetFilters = {},
-  limit = 5000,
+  limit = getMapPetsFetchLimit(),
 ) {
   const safeBounds = normalizeBounds(bounds);
 
@@ -59,6 +60,10 @@ export function buildMapPetsQuery(
     maxLng: String(safeBounds.east),
     limit: String(limit),
   });
+
+  if (bounds.zoom !== undefined) {
+    params.set("zoom", String(bounds.zoom));
+  }
 
   if (filters.species && filters.species !== "all") {
     params.set("species", filters.species);
@@ -105,6 +110,8 @@ function normalizeMapMarkerPet(pet: MapMarkerPet): MapMarkerPet {
     reportStatus: pet.reportStatus,
     latitude: Number(pet.latitude),
     longitude: Number(pet.longitude),
+    ...(pet.cityName ? { cityName: pet.cityName } : {}),
+    ...(pet.stateCode ? { stateCode: pet.stateCode } : {}),
     ...(pet.reportType ? { reportType: pet.reportType } : {}),
   };
 }
@@ -123,16 +130,37 @@ export async function fetchMapPets(
   filters: MapPetFilters = {},
   signal?: AbortSignal,
 ): Promise<MapPetsResponse> {
-  const query = buildMapPetsQuery(bounds, filters, 5000);
+  const query = buildMapPetsQuery(bounds, filters);
+  const url = `/api/pets/map?${query.toString()}`;
 
-  const result = await apiGet<MapPetsResponse>(
-    `/api/pets/map?${query.toString()}`,
-    signal,
-  );
+  console.log("[map:fetch] request", {
+    url,
+    bounds,
+    filters,
+    zoom: bounds.zoom,
+  });
+
+  const result = await apiGet<MapPetsResponse>(url, signal);
+
+  const clusterCount = result.clusters?.length ?? 0;
+  const clusterSum =
+    result.clusters?.reduce((sum, cluster) => sum + cluster.count, 0) ?? 0;
+
+  console.log("[map:fetch] response", {
+    total: result.total,
+    returned: result.returned,
+    pets: result.pets?.length ?? 0,
+    clusters: clusterCount,
+    clusterSum,
+    sampleCluster: result.clusters?.[0] ?? null,
+    samplePet: result.pets?.[0] ?? null,
+  });
 
   return {
-    pets: result.pets.map(normalizeMapMarkerPet),
+    pets: (result.pets ?? []).map(normalizeMapMarkerPet),
+    clusters: result.clusters ?? [],
     total: result.total,
+    returned: result.returned ?? result.pets?.length ?? 0,
   };
 }
 

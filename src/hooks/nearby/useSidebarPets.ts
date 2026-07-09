@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchSidebarPets, type MapPetFilters } from "../../api/pets";
-import { isFetchableMapBounds, type MapBounds } from "../../types/map";
+import {
+  getMapFetchDebounceMs,
+  isFetchableMapBounds,
+  type MapBounds,
+} from "../../types/map";
 import type { SidebarPet } from "../../types/pets";
 import { hasCachedUserLocation } from "./useUserLocation";
 
@@ -58,6 +62,7 @@ export function useSidebarPets(
     bounds?.south,
     bounds?.east,
     bounds?.west,
+    bounds?.zoom,
     filters.species,
     filters.reportStatus,
     filters.search,
@@ -85,36 +90,73 @@ export function useSidebarPets(
       setSidebarLoading(true);
       setSidebarError(null);
 
-      try {
-        const result = await fetchSidebarPets(
-          currentBounds,
-          currentFilters,
-          {
-            page: currentPage,
-            limit: SIDEBAR_LIMIT,
-          },
-          controller.signal,
-        );
+      const maxAttempts = 4;
+      let lastError: unknown = null;
 
-        setSidebarPets(result.pets);
-        setSidebarTotal(result.total);
-        hasLoadedSidebarRef.current = true;
-      } catch (err) {
-        if (controller.signal.aborted) return;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          const result = await fetchSidebarPets(
+            currentBounds,
+            currentFilters,
+            {
+              page: currentPage,
+              limit: SIDEBAR_LIMIT,
+            },
+            controller.signal,
+          );
 
-        setSidebarError(
-          err instanceof Error ? err.message : "Failed to load sidebar pets",
-        );
-      } finally {
-        if (!controller.signal.aborted) {
-          setSidebarLoading(false);
+          setSidebarPets(result.pets);
+          setSidebarTotal(result.total);
+          hasLoadedSidebarRef.current = true;
+          lastError = null;
+          break;
+        } catch (err) {
+          if (controller.signal.aborted) return;
+
+          lastError = err;
+          const message =
+            err instanceof Error ? err.message.toLowerCase() : "";
+          const canRetry =
+            attempt < maxAttempts &&
+            (message.includes("failed to fetch") ||
+              message.includes("network") ||
+              message.includes("fetch failed") ||
+              message.includes("request failed with status 5"));
+
+          if (!canRetry) break;
+
+          await new Promise<void>((resolve, reject) => {
+            const timeoutId = window.setTimeout(resolve, 600 * attempt);
+            controller.signal.addEventListener(
+              "abort",
+              () => {
+                window.clearTimeout(timeoutId);
+                reject(new DOMException("Aborted", "AbortError"));
+              },
+              { once: true },
+            );
+          }).catch(() => undefined);
+
+          if (controller.signal.aborted) return;
         }
+      }
+
+      if (lastError && !controller.signal.aborted) {
+        setSidebarError(
+          lastError instanceof Error
+            ? lastError.message
+            : "Failed to load sidebar pets",
+        );
+      }
+
+      if (!controller.signal.aborted) {
+        setSidebarLoading(false);
       }
     }
 
     const timeoutId = window.setTimeout(() => {
       void loadSidebarPets();
-    }, 500);
+    }, Math.max(getMapFetchDebounceMs(bounds), 500));
 
     return () => {
       window.clearTimeout(timeoutId);
@@ -125,6 +167,7 @@ export function useSidebarPets(
     bounds?.south,
     bounds?.east,
     bounds?.west,
+    bounds?.zoom,
     filters.species,
     filters.reportStatus,
     filters.search,

@@ -45,7 +45,15 @@ export function NearbyPage() {
     filters,
   } = useNearbyFilters();
 
-  const { pets, loading: mapLoading, reload } = useNearbyPets(bounds, filters);
+  const {
+    pets,
+    clusters,
+    loading: mapLoading,
+    error: mapError,
+    total: mapTotal,
+    returned: mapReturned,
+    reload,
+  } = useNearbyPets(bounds, filters);
 
   const {
     sidebarPets,
@@ -283,15 +291,60 @@ export function NearbyPage() {
 
         <NearbyMapPanel
           pets={pets}
+          clusters={clusters}
           selectedPetId={selectedPetId}
           selectedPet={selectedMarkerPet}
           userLocation={userLocation.location}
           loading={mapLoading}
+          markerTotal={mapTotal}
+          markerReturned={mapReturned}
           centerOnUserKey={centerOnUserKey}
           mapResizeKey={sidebarCollapsed}
           onBoundsChange={handleBoundsChange}
           onPetSelect={handleSelectPet}
         />
+
+        {mapError ? (
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: 16,
+              transform: "translateX(-50%)",
+              zIndex: 10000,
+              display: "flex",
+              gap: 10,
+              alignItems: "center",
+              padding: "10px 14px",
+              borderRadius: 12,
+              background: "rgba(255,255,255,0.96)",
+              border: "1px solid rgba(0,0,0,0.1)",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
+              maxWidth: "min(420px, calc(100% - 32px))",
+            }}
+          >
+            <span style={{ fontSize: 13, color: "#374151" }}>
+              Map pets failed to load. {mapError}
+            </span>
+            <button
+              type="button"
+              onClick={reload}
+              style={{
+                border: 0,
+                borderRadius: 8,
+                padding: "6px 10px",
+                background: "#111827",
+                color: "#fff",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        ) : null}
 
         <button
           type="button"

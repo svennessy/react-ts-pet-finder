@@ -35,6 +35,8 @@ export type MapMarkerPet = {
   reportStatus: PetReportStatus;
   latitude: number;
   longitude: number;
+  cityName?: string | null;
+  stateCode?: string | null;
 };
 
 export type SidebarPet = {
@@ -60,9 +62,20 @@ export type PetDetail = SidebarPet & {
   owner?: PetOwner;
 };
 
+export type MapCluster = {
+  id: string;
+  count: number;
+  latitude: number;
+  longitude: number;
+  reportStatus: PetReportStatus;
+  samplePetId: string;
+};
+
 export type MapPetsResponse = {
   pets: MapMarkerPet[];
+  clusters?: MapCluster[];
   total: number;
+  returned?: number;
 };
 
 export type SidebarPetsResponse = {
