@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
 
-type BadgeVariant = "lost" | "found" | "resolved" | "neutral";
+type BadgeVariant =
+  | "lost"
+  | "found"
+  | "resolved"
+  | "neutral"
+  | "verified"
+  | "unverified";
 
 type BadgeProps = {
   children: ReactNode;
@@ -23,6 +29,14 @@ const badgeStyles: Record<BadgeVariant, React.CSSProperties> = {
   neutral: {
     background: "#f3f4f6",
     color: "#374151",
+  },
+  verified: {
+    background: "#dcfce7",
+    color: "#166534",
+  },
+  unverified: {
+    background: "#fef3c7",
+    color: "#92400e",
   },
 };
 

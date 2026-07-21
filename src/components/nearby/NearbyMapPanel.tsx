@@ -18,6 +18,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { MapBounds } from "../../types/map";
 import { MAP_MIN_ZOOM } from "../../types/map";
 import type { MapCluster, MapMarkerPet } from "../../types/pets";
+import type { PetSighting } from "../../types/sightings";
 
 const mapTilerKey = import.meta.env.VITE_MAPTILER_KEY;
 const mapTilerStyle = `https://api.maptiler.com/maps/hybrid/style.json?key=${mapTilerKey}`;
@@ -32,7 +33,6 @@ const SPIDERFY_COLLAPSE_ZOOM = 11.5;
 const SPIDERFY_CIRCLE_POINTS = 72;
 const LOCATION_GROUP_DECIMALS = 3;
 const SPIDERFY_LOCATION_METERS = 50;
-
 type UserLocation = {
   latitude: number;
   longitude: number;
@@ -52,12 +52,22 @@ type DisplayPet = MapMarkerPet & {
   sharedLocationCount: number;
 };
 
+type MapFocusRequest = {
+  key: number;
+  latitude: number;
+  longitude: number;
+  zoom?: number;
+};
+
 type NearbyMapPanelProps = {
   pets: MapMarkerPet[];
   clusters?: MapCluster[];
   selectedPetId: string | null;
   selectedPet: MapMarkerPet | null;
   userLocation: UserLocation | null;
+  sightings?: PetSighting[];
+  highlightedSightingId?: string | null;
+  focusRequest?: MapFocusRequest | null;
   loading?: boolean;
   markerTotal?: number;
   markerReturned?: number;
@@ -293,6 +303,28 @@ function buildCircleCoordinates({
   return coordinates;
 }
 
+/**
+ * MapLibre's getClusterExpansionZoom often returns only +0.1–0.5, which feels
+ * like the bubble barely moves. Jump far enough that backend grid cells and
+ * client clusters actually split (Zillow-style drill-in).
+ */
+function resolveClusterClickZoom(
+  currentZoom: number,
+  expansionZoom?: number,
+  maxZoom = SPIDERFY_MIN_ZOOM,
+) {
+  const minJump =
+    currentZoom < 6 ? 3.5 : currentZoom < 9 ? 2.75 : currentZoom < 11 ? 2 : 1.5;
+  const minTarget = currentZoom + minJump;
+  // Also close half the remaining gap to individual-marker zoom.
+  const halfway = currentZoom + (maxZoom - currentZoom) * 0.55;
+  const target =
+    expansionZoom !== undefined && Number.isFinite(expansionZoom)
+      ? Math.max(expansionZoom, minTarget, halfway)
+      : Math.max(minTarget, halfway);
+  return Math.min(target, maxZoom);
+}
+
 function getLeafPetId(leaf: GeoJSON.Feature) {
   const rawId = leaf.properties?.id;
   if (rawId === undefined || rawId === null) return null;
@@ -354,15 +386,19 @@ function getStackPetIdsFromProperties(
   properties: GeoJSON.GeoJsonProperties | null,
 ) {
   const raw = properties?.stackPetIds;
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return [String(raw)];
+  }
   if (typeof raw !== "string" || raw.length === 0) return null;
   return raw.split(",").filter(Boolean).sort();
 }
 
+const SMALL_STACK_SPIDERFY_MAX = 8;
+
 function openStackFromPetIds(
   petIds: string[],
   safePets: MapMarkerPet[],
-  openSpiderfyGroup: (group: SpiderfyGroup, shouldZoomIn?: boolean) => void,
-  map: maplibregl.Map | null,
+  requestSpiderfy: (group: SpiderfyGroup) => void,
 ) {
   const stackPets = petIds
     .map((id) => safePets.find((pet) => pet.id === id))
@@ -371,14 +407,11 @@ function openStackFromPetIds(
   if (stackPets.length <= 1) return false;
 
   const anchorPet = stackPets[0];
-  openSpiderfyGroup(
-    {
-      petIds,
-      latitude: anchorPet.latitude,
-      longitude: anchorPet.longitude,
-    },
-    map ? map.getZoom() < SPIDERFY_MIN_ZOOM : false,
-  );
+  requestSpiderfy({
+    petIds,
+    latitude: anchorPet.latitude,
+    longitude: anchorPet.longitude,
+  });
 
   return true;
 }
@@ -389,6 +422,9 @@ function NearbyMapPanelBase({
   selectedPetId,
   selectedPet,
   userLocation,
+  sightings = [],
+  highlightedSightingId = null,
+  focusRequest = null,
   loading = false,
   markerTotal = 0,
   markerReturned = 0,
@@ -402,11 +438,16 @@ function NearbyMapPanelBase({
   const resizeTimeoutRef = useRef<number | null>(null);
   const lastBoundsRef = useRef("");
   const lastCenteredPetIdRef = useRef<string | null>(null);
+  const lastFocusKeyRef = useRef<number | null>(null);
   const initialLocationCenteredRef = useRef(false);
   const activeSpiderfyGroupRef = useRef<SpiderfyGroup | null>(null);
+  const [activeSightingId, setActiveSightingId] = useState<string | null>(null);
 
   const [activeSpiderfyGroup, setActiveSpiderfyGroup] =
     useState<SpiderfyGroup | null>(null);
+  const [pendingSpiderfy, setPendingSpiderfy] = useState<SpiderfyGroup | null>(
+    null,
+  );
   const [mapZoom, setMapZoom] = useState(MAP_MIN_ZOOM);
   const [mapViewKey, setMapViewKey] = useState(0);
 
@@ -414,34 +455,23 @@ function NearbyMapPanelBase({
     activeSpiderfyGroupRef.current = activeSpiderfyGroup;
   }, [activeSpiderfyGroup]);
 
-  const openSpiderfyGroup = useCallback(
-    (group: SpiderfyGroup, shouldZoomIn = false) => {
-      onPetSelect(null);
-      setActiveSpiderfyGroup(group);
-      setMapViewKey((value) => value + 1);
-
-      if (!shouldZoomIn) return;
-
-      const map = mapRef.current;
-      if (!map) return;
-
-      map.easeTo({
-        center: [group.longitude, group.latitude],
-        zoom: Math.max(map.getZoom(), SPIDERFY_MIN_ZOOM + 0.5),
-        duration: 500,
-      });
-    },
-    [onPetSelect],
-  );
+  const openSpiderfyGroup = useCallback((group: SpiderfyGroup) => {
+    setPendingSpiderfy(null);
+    onPetSelect(null);
+    setActiveSpiderfyGroup(group);
+    setMapViewKey((value) => value + 1);
+  }, [onPetSelect]);
 
   const collapseSpiderfyIfNeeded = useCallback(() => {
     const map = mapRef.current;
     if (!map || !activeSpiderfyGroupRef.current) return;
+    // Keep spiderfy while a pending zoom-in is in flight.
+    if (pendingSpiderfy) return;
 
     if (map.getZoom() < SPIDERFY_COLLAPSE_ZOOM) {
       setActiveSpiderfyGroup(null);
     }
-  }, []);
+  }, [pendingSpiderfy]);
 
   const safePets = useMemo(() => {
     return pets
@@ -463,7 +493,140 @@ function NearbyMapPanelBase({
     [safePets],
   );
 
-  const showAggregateClusters = clusters.length > 0;
+  // Keep aggregate bubbles until individual pets arrive, but never after street zoom
+  // once pets are loaded (avoids stale aggregates blocking spiderfy).
+  const showAggregateClusters =
+    clusters.length > 0 &&
+    (mapZoom < SPIDERFY_MIN_ZOOM || safePets.length === 0);
+
+  const zoomThenSpiderfy = useCallback(
+    (group: SpiderfyGroup) => {
+      const map = mapRef.current;
+      const zoom = map?.getZoom() ?? mapZoom;
+
+      const matchedIds = group.petIds.filter((id) =>
+        safePets.some((pet) => pet.id === id),
+      );
+      const colocatedReady = locationGroups.some((petsAtLocation) => {
+        if (petsAtLocation.length <= 1) return false;
+        return (
+          distanceMeters(
+            petsAtLocation[0].latitude,
+            petsAtLocation[0].longitude,
+            group.latitude,
+            group.longitude,
+          ) <= SPIDERFY_LOCATION_METERS
+        );
+      });
+
+      const canOpenNow =
+        !showAggregateClusters &&
+        zoom >= SPIDERFY_MIN_ZOOM &&
+        (matchedIds.length > 1 || colocatedReady);
+
+      if (canOpenNow) {
+        if (matchedIds.length > 1) {
+          openSpiderfyGroup({ ...group, petIds: matchedIds.sort() });
+          return;
+        }
+
+        const colocated = locationGroups.find((petsAtLocation) => {
+          if (petsAtLocation.length <= 1) return false;
+          return (
+            distanceMeters(
+              petsAtLocation[0].latitude,
+              petsAtLocation[0].longitude,
+              group.latitude,
+              group.longitude,
+            ) <= SPIDERFY_LOCATION_METERS
+          );
+        });
+
+        if (colocated) {
+          openSpiderfyGroup({
+            petIds: colocated.map((pet) => pet.id).sort(),
+            latitude: colocated[0].latitude,
+            longitude: colocated[0].longitude,
+          });
+        }
+        return;
+      }
+
+      // Zoom into individual-marker mode first; open spiderfy once pets load.
+      setPendingSpiderfy(group);
+      setActiveSpiderfyGroup(null);
+
+      if (!map) return;
+
+      // Only move the camera when we still need street-level zoom.
+      // Panning here caused extra moveend fetches and made the first click feel like a no-op.
+      if (zoom < SPIDERFY_MIN_ZOOM) {
+        map.easeTo({
+          center: [group.longitude, group.latitude],
+          zoom: SPIDERFY_MIN_ZOOM + 0.5,
+          duration: 450,
+        });
+      }
+    },
+    [
+      locationGroups,
+      mapZoom,
+      openSpiderfyGroup,
+      safePets,
+      showAggregateClusters,
+    ],
+  );
+
+  // After zoom settles into individual mode, open any pending spiderfy group.
+  useEffect(() => {
+    if (!pendingSpiderfy) return;
+
+    // User abandoned the drill-in by zooming way out.
+    if (mapZoom < 9) {
+      setPendingSpiderfy(null);
+      return;
+    }
+
+    // Still zooming in / waiting for individual markers — keep pending armed.
+    if (showAggregateClusters || mapZoom < SPIDERFY_MIN_ZOOM) return;
+
+    const matchedIds = pendingSpiderfy.petIds.filter((id) =>
+      safePets.some((pet) => pet.id === id),
+    );
+
+    if (matchedIds.length > 1) {
+      openSpiderfyGroup({ ...pendingSpiderfy, petIds: matchedIds.sort() });
+      return;
+    }
+
+    const colocated = locationGroups.find((group) => {
+      if (group.length <= 1) return false;
+      const anchor = group[0];
+      return (
+        distanceMeters(
+          anchor.latitude,
+          anchor.longitude,
+          pendingSpiderfy.latitude,
+          pendingSpiderfy.longitude,
+        ) <= SPIDERFY_LOCATION_METERS
+      );
+    });
+
+    if (colocated) {
+      openSpiderfyGroup({
+        petIds: colocated.map((pet) => pet.id).sort(),
+        latitude: colocated[0].latitude,
+        longitude: colocated[0].longitude,
+      });
+    }
+  }, [
+    locationGroups,
+    mapZoom,
+    openSpiderfyGroup,
+    pendingSpiderfy,
+    safePets,
+    showAggregateClusters,
+  ]);
 
   useEffect(() => {
     console.log("[map:panel] props", {
@@ -861,8 +1024,46 @@ function NearbyMapPanelBase({
   }, [userLocation]);
 
   useEffect(() => {
+    if (!focusRequest) return;
+    if (lastFocusKeyRef.current === focusRequest.key) return;
+
+    lastFocusKeyRef.current = focusRequest.key;
+    if (selectedPetId) {
+      lastCenteredPetIdRef.current = selectedPetId;
+    }
+
+    const focusMap = () => {
+      const map = mapRef.current?.getMap() ?? mapRef.current;
+      if (!map || typeof map.easeTo !== "function") return false;
+
+      map.easeTo({
+        center: [focusRequest.longitude, focusRequest.latitude],
+        zoom: focusRequest.zoom ?? Math.max(map.getZoom?.() ?? MAP_MIN_ZOOM, 14),
+        duration: 500,
+      });
+      return true;
+    };
+
+    if (focusMap()) return;
+
+    const retries = [100, 300, 700, 1200].map((delay) =>
+      window.setTimeout(() => {
+        void focusMap();
+      }, delay),
+    );
+
+    return () => {
+      for (const timeoutId of retries) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [focusRequest, selectedPetId]);
+
+  useEffect(() => {
     if (!selectedPet?.id) return;
     if (lastCenteredPetIdRef.current === selectedPet.id) return;
+    // Explicit focus (e.g. bulletin sighting) wins over pet home centering.
+    if (focusRequest && lastFocusKeyRef.current === focusRequest.key) return;
 
     lastCenteredPetIdRef.current = selectedPet.id;
 
@@ -871,22 +1072,64 @@ function NearbyMapPanelBase({
       zoom: Math.max(mapRef.current.getZoom(), 13),
       duration: 450,
     });
-  }, [selectedPet?.id, selectedPet?.latitude, selectedPet?.longitude]);
+  }, [
+    focusRequest,
+    selectedPet?.id,
+    selectedPet?.latitude,
+    selectedPet?.longitude,
+  ]);
+
+  useEffect(() => {
+    if (highlightedSightingId) {
+      setActiveSightingId(highlightedSightingId);
+      return;
+    }
+
+    if (
+      activeSightingId &&
+      !sightings.some((sighting) => sighting.id === activeSightingId)
+    ) {
+      setActiveSightingId(null);
+    }
+  }, [activeSightingId, highlightedSightingId, sightings]);
 
   useEffect(() => {
     if (!centerOnUserKey || !userLocation) return;
 
     lastCenteredPetIdRef.current = null;
+    setActiveSpiderfyGroup(null);
 
-    const map = mapRef.current;
-    if (!map) return;
+    const centerMap = () => {
+      const map = mapRef.current?.getMap() ?? mapRef.current;
+      if (!map || typeof map.easeTo !== "function") return false;
 
-    map.easeTo({
-      center: [userLocation.longitude, userLocation.latitude],
-      zoom: Math.max(map.getZoom(), 11),
-      duration: 450,
-    });
-  }, [centerOnUserKey, userLocation]);
+      map.easeTo({
+        center: [userLocation.longitude, userLocation.latitude],
+        zoom: Math.max(map.getZoom?.() ?? MAP_MIN_ZOOM, 12),
+        duration: 500,
+      });
+
+      window.setTimeout(() => {
+        updateZoomFromMap();
+        updateBoundsFromMap();
+      }, 550);
+
+      return true;
+    };
+
+    if (centerMap()) return;
+
+    // Map may not be ready yet — retry briefly.
+    let attempts = 0;
+    const retryId = window.setInterval(() => {
+      attempts += 1;
+      if (centerMap() || attempts >= 20) {
+        window.clearInterval(retryId);
+      }
+    }, 100);
+
+    return () => window.clearInterval(retryId);
+  }, [centerOnUserKey, userLocation, updateBoundsFromMap, updateZoomFromMap]);
 
   useEffect(() => {
     if (resizeTimeoutRef.current) {
@@ -921,7 +1164,9 @@ function NearbyMapPanelBase({
     (event: maplibregl.MapLayerMouseEvent) => {
       const features = event.features ?? [];
       if (features.length === 0) {
+        setPendingSpiderfy(null);
         setActiveSpiderfyGroup(null);
+        setActiveSightingId(null);
         return;
       }
 
@@ -929,6 +1174,17 @@ function NearbyMapPanelBase({
       const source = map?.getSource("pets") as
         | maplibregl.GeoJSONSource
         | undefined;
+
+      const sightingFeature = features.find(
+        (feature) =>
+          feature.layer?.id === "sighting-markers" ||
+          feature.layer?.id === "sighting-markers-highlight",
+      );
+
+      if (sightingFeature?.properties?.id) {
+        setActiveSightingId(String(sightingFeature.properties.id));
+        return;
+      }
 
       const stackFeature = features.find(
         (feature) =>
@@ -941,27 +1197,66 @@ function NearbyMapPanelBase({
           | maplibregl.GeoJSONSource
           | undefined;
         const clusterId = stackFeature.properties?.cluster_id;
+        const stackedCount = Number(
+          stackFeature.properties?.stackedCount ??
+            stackFeature.properties?.point_count ??
+            0,
+        );
+        const stackPetIds =
+          getStackPetIdsFromProperties(stackFeature.properties) ?? [];
+        const coords = (stackFeature.geometry as GeoJSON.Point).coordinates;
+        const isSmallStack =
+          stackPetIds.length > 1 ||
+          (stackedCount > 1 && stackedCount <= SMALL_STACK_SPIDERFY_MAX);
 
+        // Small stacks (Willy/Goose): one click zooms if needed, then spiderfies.
+        // Must run before progressive aggregate drill-in (that was the 3-click path).
+        if (isSmallStack) {
+          const opened = openStackFromPetIds(
+            stackPetIds,
+            safePets,
+            zoomThenSpiderfy,
+          );
+          if (!opened) {
+            zoomThenSpiderfy({
+              petIds: stackPetIds,
+              longitude: coords[0],
+              latitude: coords[1],
+            });
+          }
+          return;
+        }
+
+        // Large aggregate bubbles that MapLibre has further clustered: drill in.
         if (
           showAggregateClusters &&
           stackSource &&
           clusterId !== undefined &&
           clusterId !== null
         ) {
+          const currentZoom = map.getZoom();
           void stackSource
             .getClusterExpansionZoom(Number(clusterId))
             .then((expansionZoom) => {
               map.easeTo({
                 center: event.lngLat,
-                zoom: Math.min(expansionZoom, SPIDERFY_MIN_ZOOM),
-                duration: 400,
+                zoom: resolveClusterClickZoom(
+                  currentZoom,
+                  expansionZoom,
+                  SPIDERFY_MIN_ZOOM + 0.5,
+                ),
+                duration: 450,
               });
             })
             .catch(() => {
               map.easeTo({
                 center: event.lngLat,
-                zoom: Math.min(map.getZoom() + 1, SPIDERFY_MIN_ZOOM),
-                duration: 400,
+                zoom: resolveClusterClickZoom(
+                  currentZoom,
+                  undefined,
+                  SPIDERFY_MIN_ZOOM + 0.5,
+                ),
+                duration: 450,
               });
             });
           return;
@@ -970,22 +1265,13 @@ function NearbyMapPanelBase({
         if (showAggregateClusters || map.getZoom() < SPIDERFY_MIN_ZOOM) {
           map.easeTo({
             center: event.lngLat,
-            zoom: Math.min(map.getZoom() + 1, SPIDERFY_MIN_ZOOM),
-            duration: 400,
+            zoom: resolveClusterClickZoom(
+              map.getZoom(),
+              undefined,
+              SPIDERFY_MIN_ZOOM + 0.5,
+            ),
+            duration: 450,
           });
-          return;
-        }
-
-        const stackPetIds = getStackPetIdsFromProperties(
-          stackFeature.properties,
-        );
-        if (stackPetIds && stackPetIds.length > 1) {
-          openStackFromPetIds(
-            stackPetIds,
-            safePets,
-            openSpiderfyGroup,
-            map.getMap(),
-          );
           return;
         }
       }
@@ -1015,28 +1301,32 @@ function NearbyMapPanelBase({
               )
             ) {
               const anchorPet = clusterPets[0];
-              openSpiderfyGroup(
-                {
-                  petIds,
-                  latitude: anchorPet.latitude,
-                  longitude: anchorPet.longitude,
-                },
-                map ? map.getZoom() < SPIDERFY_MIN_ZOOM : false,
-              );
+              zoomThenSpiderfy({
+                petIds,
+                latitude: anchorPet.latitude,
+                longitude: anchorPet.longitude,
+              });
               return;
             }
 
             setActiveSpiderfyGroup(null);
+            const currentZoom = map?.getZoom() ?? SPIDERFY_MIN_ZOOM;
             void source
               .getClusterExpansionZoom(clusterId)
               .then((nextZoom) => {
                 map?.easeTo({
                   center: coordinates,
-                  zoom: nextZoom,
+                  zoom: resolveClusterClickZoom(currentZoom, nextZoom, 16),
                   duration: 500,
                 });
               })
-              .catch(() => {});
+              .catch(() => {
+                map?.easeTo({
+                  center: coordinates,
+                  zoom: resolveClusterClickZoom(currentZoom, undefined, 16),
+                  duration: 500,
+                });
+              });
           })
           .catch(() => {});
 
@@ -1069,18 +1359,24 @@ function NearbyMapPanelBase({
           openStackFromPetIds(
             overlappingPets.map((pet) => pet.id),
             safePets,
-            openSpiderfyGroup,
-            map.getMap(),
+            zoomThenSpiderfy,
           )
         ) {
           return;
         }
 
+        setPendingSpiderfy(null);
         setActiveSpiderfyGroup(null);
         onPetSelect(id);
       }
     },
-    [activeSpiderfyGroup, onPetSelect, openSpiderfyGroup, safePets, showAggregateClusters],
+    [
+      activeSpiderfyGroup,
+      onPetSelect,
+      safePets,
+      showAggregateClusters,
+      zoomThenSpiderfy,
+    ],
   );
 
   const handleMouseEnter = useCallback(() => {
@@ -1104,6 +1400,41 @@ function NearbyMapPanelBase({
 
   const spiderfyCenterOpacity = activeSpiderfyGroup ? 1 : 0;
 
+  const sightingsGeojson = useMemo(() => {
+    return {
+      type: "FeatureCollection" as const,
+      features: sightings
+        .filter(
+          (sighting) =>
+            Number.isFinite(sighting.latitude) &&
+            Number.isFinite(sighting.longitude),
+        )
+        .map((sighting) => ({
+          type: "Feature" as const,
+          properties: {
+            id: sighting.id,
+            notes: sighting.notes ?? "",
+            locationLabel: sighting.locationLabel ?? "",
+            verified: sighting.verificationStatus === "verified" ? 1 : 0,
+            highlighted:
+              sighting.id === highlightedSightingId ||
+              sighting.id === activeSightingId
+                ? 1
+                : 0,
+          },
+          geometry: {
+            type: "Point" as const,
+            coordinates: [sighting.longitude, sighting.latitude],
+          },
+        })),
+    };
+  }, [activeSightingId, highlightedSightingId, sightings]);
+
+  const activeSighting = useMemo(
+    () => sightings.find((sighting) => sighting.id === activeSightingId) ?? null,
+    [activeSightingId, sightings],
+  );
+
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <Map
@@ -1126,6 +1457,8 @@ function NearbyMapPanelBase({
           "selected-pets",
           "spiderfied-pets",
           "selected-spiderfied-pets",
+          "sighting-markers",
+          "sighting-markers-highlight",
         ]}
         onClick={handleMapClick}
         onLoad={handleMapLoad}
@@ -1389,6 +1722,42 @@ function NearbyMapPanelBase({
           />
         </Source>
 
+        <Source id="pet-sightings" type="geojson" data={sightingsGeojson}>
+          <Layer
+            id="sighting-markers"
+            type="circle"
+            filter={["!=", ["get", "highlighted"], 1]}
+            paint={{
+              "circle-color": [
+                "case",
+                ["==", ["get", "verified"], 1],
+                "#16a34a",
+                "#f59e0b",
+              ],
+              "circle-radius": 8,
+              "circle-stroke-width": 2,
+              "circle-stroke-color": "#ffffff",
+              "circle-opacity": 0.95,
+            }}
+          />
+          <Layer
+            id="sighting-markers-highlight"
+            type="circle"
+            filter={["==", ["get", "highlighted"], 1]}
+            paint={{
+              "circle-color": [
+                "case",
+                ["==", ["get", "verified"], 1],
+                "#15803d",
+                "#d97706",
+              ],
+              "circle-radius": 11,
+              "circle-stroke-width": 3,
+              "circle-stroke-color": "#ffffff",
+            }}
+          />
+        </Source>
+
         {selectedDisplayPet ? (
           <Popup
             longitude={selectedDisplayPet.longitude}
@@ -1407,6 +1776,39 @@ function NearbyMapPanelBase({
                   : "Resolved"}{" "}
               · {selectedDisplayPet.species}
             </p>
+            {sightings.length > 0 ? (
+              <p style={{ margin: "6px 0 0", color: "#92400e" }}>
+                {sightings.length} sighting{sightings.length === 1 ? "" : "s"} on
+                map
+              </p>
+            ) : null}
+          </Popup>
+        ) : null}
+
+        {activeSighting ? (
+          <Popup
+            longitude={activeSighting.longitude}
+            latitude={activeSighting.latitude}
+            anchor="bottom"
+            closeButton
+            closeOnClick={false}
+            onClose={() => setActiveSightingId(null)}
+            offset={18}
+          >
+            <strong>Sighting</strong>
+            <p style={{ margin: "4px 0 0", color: "#6b7280" }}>
+              {activeSighting.verificationStatus === "verified"
+                ? "Verified by owner"
+                : "Unverified"}
+              {!activeSighting.photoUrl ? " · No photo" : ""}
+            </p>
+            <p style={{ margin: "4px 0 0", color: "#6b7280" }}>
+              {activeSighting.locationLabel ??
+                `${activeSighting.latitude.toFixed(4)}, ${activeSighting.longitude.toFixed(4)}`}
+            </p>
+            {activeSighting.notes ? (
+              <p style={{ margin: "6px 0 0" }}>{activeSighting.notes}</p>
+            ) : null}
           </Popup>
         ) : null}
       </Map>

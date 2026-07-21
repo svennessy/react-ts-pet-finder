@@ -130,36 +130,42 @@ export function Header() {
         </NavLink>
 
         {auth.isAuthenticated ? (
-          <NavLink
-            to="/notifications"
-            style={{
-              ...navLinkStyle({ isActive: false }),
-              position: "relative",
-            }}
-          >
-            Notifications
-            {notifications.unreadCount > 0 ? (
-              <span
-                style={{
-                  position: "absolute",
-                  top: -8,
-                  right: -12,
-                  minWidth: 18,
-                  height: 18,
-                  borderRadius: 999,
-                  background: "#ef4444",
-                  color: "white",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  display: "grid",
-                  placeItems: "center",
-                  padding: "0 4px",
-                }}
-              >
-                {notifications.unreadCount}
-              </span>
-            ) : null}
-          </NavLink>
+          <>
+            <NavLink to="/my-pets" style={navLinkStyle}>
+              My Pets
+            </NavLink>
+
+            <NavLink
+              to="/notifications"
+              style={{
+                ...navLinkStyle({ isActive: false }),
+                position: "relative",
+              }}
+            >
+              Notifications
+              {notifications.unreadCount > 0 ? (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: -8,
+                    right: -12,
+                    minWidth: 18,
+                    height: 18,
+                    borderRadius: 999,
+                    background: "#ef4444",
+                    color: "white",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    display: "grid",
+                    placeItems: "center",
+                    padding: "0 4px",
+                  }}
+                >
+                  {notifications.unreadCount}
+                </span>
+              ) : null}
+            </NavLink>
+          </>
         ) : null}
       </nav>
     </header>

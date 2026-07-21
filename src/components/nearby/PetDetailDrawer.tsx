@@ -123,6 +123,9 @@ export function PetDetailDrawer({
 
   const location =
     pet.locationLabel ||
+    (pet.cityName && pet.stateCode
+      ? `${pet.cityName}, ${pet.stateCode}`
+      : pet.cityName) ||
     (pet.owner?.city
       ? `${pet.owner.city.name}, ${pet.owner.city.stateCode}`
       : `${pet.latitude.toFixed(4)}, ${pet.longitude.toFixed(4)}`);

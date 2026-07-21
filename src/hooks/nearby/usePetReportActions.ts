@@ -13,6 +13,8 @@ type UsePetReportActionsParams = {
   setPostPetOpen: (open: boolean) => void;
   resetDraft: () => void;
   reloadSidebar: () => void | Promise<void>;
+  /** When false, keep the selected pet after update/resolve (My Pets). Default true. */
+  clearSelectionOnSuccess?: boolean;
 };
 
 export function usePetReportActions({
@@ -21,6 +23,7 @@ export function usePetReportActions({
   setPostPetOpen,
   resetDraft,
   reloadSidebar,
+  clearSelectionOnSuccess = true,
 }: UsePetReportActionsParams) {
   const [savingPost, setSavingPost] = useState(false);
   const [deletingPet, setDeletingPet] = useState(false);
@@ -88,7 +91,9 @@ export function usePetReportActions({
 
       setPostPetOpen(false);
       resetDraft();
-      setSelectedPetId(null);
+      if (clearSelectionOnSuccess) {
+        setSelectedPetId(null);
+      }
 
       await reload();
       await reloadSidebar();
@@ -124,7 +129,9 @@ export function usePetReportActions({
         reportStatus: "resolved",
       });
 
-      setSelectedPetId(null);
+      if (clearSelectionOnSuccess) {
+        setSelectedPetId(null);
+      }
 
       await reload();
       await reloadSidebar();

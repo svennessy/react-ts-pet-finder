@@ -1,10 +1,15 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { fetchPetSightings } from "../../api/sightings";
 import type { PetSighting } from "../../types/sightings";
 
 export function usePetSightings(petId: string | null) {
   const [sightings, setSightings] = useState<PetSighting[]>([]);
   const [loading, setLoading] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const reload = useCallback(() => {
+    setReloadKey((value) => value + 1);
+  }, []);
 
   useEffect(() => {
     if (!petId) {
@@ -35,10 +40,11 @@ export function usePetSightings(petId: string | null) {
     void load();
 
     return () => controller.abort();
-  }, [petId]);
+  }, [petId, reloadKey]);
 
   return {
     sightings,
     loading,
+    reload,
   };
 }

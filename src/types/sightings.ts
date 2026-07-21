@@ -1,5 +1,7 @@
 import type { SidebarPet } from "./pets";
 
+export type SightingVerificationStatus = "unverified" | "verified";
+
 export type BulletinSighting = PetSighting & {
   pet: SidebarPet;
 };
@@ -12,6 +14,8 @@ export type PetSighting = {
   locationLabel: string | null;
   notes: string | null;
   photoUrl: string | null;
+  verificationStatus: SightingVerificationStatus;
+  verifiedAt: string | null;
   createdAt: string;
 };
 
@@ -20,4 +24,8 @@ export type CreatePetSightingBody = {
   longitude: number;
   notes?: string;
   photoUrl?: string;
+};
+
+export type UpdateSightingVerificationBody = {
+  verificationStatus: SightingVerificationStatus;
 };

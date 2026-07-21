@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { deletePetPhoto } from "../api/photos";
 import { NearbyFilters } from "../components/nearby/NearbyFilters";
 import { NearbyMapPanel } from "../components/nearby/NearbyMapPanel";
@@ -14,14 +14,17 @@ import { useNearbyFilters } from "../hooks/nearby/useNearbyFilters";
 import { useNearbyPets } from "../hooks/nearby/useNearbyPets";
 import { usePetDetails } from "../hooks/nearby/usePetDetails";
 import { usePetReportActions } from "../hooks/nearby/usePetReportActions";
+import { usePetSightings } from "../hooks/nearby/usePetSightings";
 import { usePostPetDraft } from "../hooks/nearby/usePostPetDraft";
 import { useSidebarPets } from "../hooks/nearby/useSidebarPets";
 import { useSightingsActions } from "../hooks/nearby/useSightingsActions";
 import { useUserLocation } from "../hooks/nearby/useUserLocation";
 import type { MapBounds } from "../types/map";
+import type { MapMarkerPet } from "../types/pets";
 
 export function NearbyPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const auth = useAuthSession();
   const { profile, loading: profileLoading } = useProfile();
   const favorites = useFavorites();
@@ -34,6 +37,15 @@ export function NearbyPage() {
   const [postPetOpen, setPostPetOpen] = useState(false);
   const [editingPetId, setEditingPetId] = useState<string | null>(null);
   const [centerOnUserKey, setCenterOnUserKey] = useState(0);
+  const [highlightedSightingId, setHighlightedSightingId] = useState<
+    string | null
+  >(null);
+  const [focusRequest, setFocusRequest] = useState<{
+    key: number;
+    latitude: number;
+    longitude: number;
+    zoom?: number;
+  } | null>(null);
 
   const {
     species,
@@ -68,6 +80,10 @@ export function NearbyPage() {
   } = useSidebarPets(bounds, filters);
 
   const { pet: selectedPet } = usePetDetails(selectedPetId);
+  const {
+    sightings: selectedPetSightings,
+    reload: reloadSelectedPetSightings,
+  } = usePetSightings(selectedPetId);
 
   const {
     sightingOpen,
@@ -96,8 +112,28 @@ export function NearbyPage() {
     resetDraft: resetPostPetDraft,
   });
 
-  const selectedMarkerPet =
-    pets.find((pet) => pet.id === selectedPetId) ?? null;
+  const selectedMarkerPet = useMemo((): MapMarkerPet | null => {
+    const fromMap = pets.find((pet) => pet.id === selectedPetId);
+    if (fromMap) return fromMap;
+    if (!selectedPet || String(selectedPet.id) !== selectedPetId) return null;
+
+    return {
+      id: String(selectedPet.id),
+      name: selectedPet.name,
+      species: selectedPet.species,
+      reportStatus: selectedPet.reportStatus,
+      latitude: selectedPet.latitude,
+      longitude: selectedPet.longitude,
+      cityName: selectedPet.cityName,
+      stateCode: selectedPet.stateCode,
+    };
+  }, [pets, selectedPet, selectedPetId]);
+
+  const mapPets = useMemo(() => {
+    if (!selectedMarkerPet) return pets;
+    if (pets.some((pet) => pet.id === selectedMarkerPet.id)) return pets;
+    return [...pets, selectedMarkerPet];
+  }, [pets, selectedMarkerPet]);
 
   const selectedFavoritePet =
     sidebarPets.find((pet) => pet.id === selectedPetId) ?? selectedPet ?? null;
@@ -111,10 +147,22 @@ export function NearbyPage() {
 
   function handleSelectPet(petId: string | null) {
     setSelectedPetId(petId);
+    if (!petId) {
+      setHighlightedSightingId(null);
+    }
 
     if (petId) {
       setSidebarCollapsed(true);
     }
+  }
+
+  async function handleSubmitSightingAndReload(values: {
+    latitude: number;
+    longitude: number;
+    notes: string;
+  }) {
+    await handleSubmitSighting(values);
+    reloadSelectedPetSightings();
   }
 
   function handleCloseDrawer() {
@@ -200,13 +248,105 @@ export function NearbyPage() {
       (await userLocation.requestLocation({ highAccuracy: true }));
 
     if (!location) {
-      alert(userLocation.error ?? "Unable to get your location.");
+      alert(
+        "Unable to get your location. Allow location access in the browser and try again.",
+      );
       return;
+    }
+
+    // Refresh quietly when we already had a cached point.
+    if (userLocation.location) {
+      void userLocation.requestLocation({ highAccuracy: true });
     }
 
     setSelectedPetId(null);
     setCenterOnUserKey((value) => value + 1);
   }
+
+  const nearMeParam = searchParams.get("nearMe");
+  const centerParam = searchParams.get("center");
+  const petParam = searchParams.get("pet");
+  const sightingParam = searchParams.get("sighting");
+  const latParam = searchParams.get("lat");
+  const lngParam = searchParams.get("lng");
+  const zoomParam = searchParams.get("zoom");
+
+  useEffect(() => {
+    if (!nearMeParam && !centerParam) return;
+
+    let cancelled = false;
+
+    async function centerFromQuery() {
+      const location =
+        userLocation.location ??
+        (await userLocation.requestLocation({ highAccuracy: true }));
+
+      if (cancelled || !location) return;
+
+      setSelectedPetId(null);
+      setHighlightedSightingId(null);
+      setCenterOnUserKey((value) => value + 1);
+
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("center");
+          next.delete("nearMe");
+          return next;
+        },
+        { replace: true },
+      );
+    }
+
+    void centerFromQuery();
+
+    return () => {
+      cancelled = true;
+    };
+    // Only react to the query flags — not to location object identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nearMeParam, centerParam]);
+
+  useEffect(() => {
+    if (!petParam) return;
+
+    setSelectedPetId(petParam);
+    setSidebarCollapsed(true);
+    setHighlightedSightingId(sightingParam);
+
+    const latitude = latParam ? Number(latParam) : NaN;
+    const longitude = lngParam ? Number(lngParam) : NaN;
+    const zoom = zoomParam ? Number(zoomParam) : 14;
+
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      setFocusRequest((current) => ({
+        key: (current?.key ?? 0) + 1,
+        latitude,
+        longitude,
+        zoom: Number.isFinite(zoom) ? zoom : 14,
+      }));
+    }
+
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("pet");
+        next.delete("sighting");
+        next.delete("lat");
+        next.delete("lng");
+        next.delete("zoom");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [
+    latParam,
+    lngParam,
+    petParam,
+    setSearchParams,
+    sightingParam,
+    zoomParam,
+  ]);
 
   return (
     <main
@@ -290,11 +430,14 @@ export function NearbyPage() {
         ) : null}
 
         <NearbyMapPanel
-          pets={pets}
+          pets={mapPets}
           clusters={clusters}
           selectedPetId={selectedPetId}
           selectedPet={selectedMarkerPet}
           userLocation={userLocation.location}
+          sightings={selectedPetSightings}
+          highlightedSightingId={highlightedSightingId}
+          focusRequest={focusRequest}
           loading={mapLoading}
           markerTotal={mapTotal}
           markerReturned={mapReturned}
@@ -348,9 +491,12 @@ export function NearbyPage() {
 
         <button
           type="button"
-          onClick={handleCenterOnUser}
-          disabled={userLocation.loading}
+          onClick={() => {
+            void handleCenterOnUser();
+          }}
+          disabled={userLocation.loading && !userLocation.location}
           aria-label="Center map on my location"
+          title="Center map on my location"
           style={{
             position: "absolute",
             right: 16,
@@ -362,12 +508,32 @@ export function NearbyPage() {
             border: "1px solid rgba(0,0,0,0.12)",
             background: "rgba(255,255,255,0.96)",
             boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
-            cursor: userLocation.loading ? "not-allowed" : "pointer",
+            cursor:
+              userLocation.loading && !userLocation.location
+                ? "not-allowed"
+                : "pointer",
             fontSize: 18,
             fontWeight: 800,
+            display: "grid",
+            placeItems: "center",
+            color: "#111827",
           }}
         >
-          ⌖
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.25"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="3.5" />
+            <path d="M12 2v3" />
+            <path d="M12 19v3" />
+            <path d="M2 12h3" />
+            <path d="M19 12h3" />
+          </svg>
         </button>
 
         <PostPetButton onClick={handleOpenPostPetModal} />
@@ -408,7 +574,7 @@ export function NearbyPage() {
           onSubmitPetReport={handleSubmitPetReport}
           onDeleteExistingPhoto={handleDeleteExistingPhoto}
           onCloseSightingModal={() => setSightingOpen(false)}
-          onSubmitSighting={handleSubmitSighting}
+          onSubmitSighting={handleSubmitSightingAndReload}
         />
       </div>
     </main>

@@ -18,6 +18,12 @@ const FavoritesPage = lazy(() =>
   })),
 );
 
+const MyPetsPage = lazy(() =>
+  import("../pages/MyPetsPage").then((module) => ({
+    default: module.MyPetsPage,
+  })),
+);
+
 const HomePage = lazy(() =>
   import("../pages/HomePage").then((module) => ({ default: module.HomePage })),
 );
@@ -57,6 +63,7 @@ export function App() {
           <Route path="/nearby" element={<NearbyPage />} />
           <Route path="/bulletin" element={<BulletinPage />} />
           <Route path="/favorites" element={<FavoritesPage />} />
+          <Route path="/my-pets" element={<MyPetsPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/auth" element={<AuthPage />} />

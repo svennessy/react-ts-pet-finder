@@ -46,7 +46,11 @@ export function PetCard({
   const hasMultiplePhotos = photos.length > 1;
 
   const location =
-    pet.locationLabel || `${pet.latitude.toFixed(4)}, ${pet.longitude.toFixed(4)}`;
+    pet.locationLabel ||
+    (pet.cityName && pet.stateCode
+      ? `${pet.cityName}, ${pet.stateCode}`
+      : pet.cityName) ||
+    `${pet.latitude.toFixed(4)}, ${pet.longitude.toFixed(4)}`;
 
   function showPreviousPhoto(event: React.MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();

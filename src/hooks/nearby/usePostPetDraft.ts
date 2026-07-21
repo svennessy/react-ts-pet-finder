@@ -42,11 +42,12 @@ export function usePostPetDraft() {
           ?.map((photo) => {
             const imageUrl =
               photo.resolvedUrl ?? photo.imageUrl ?? photo.imagePath;
+            const id = Number(photo.id);
 
-            if (!imageUrl) return null;
+            if (!imageUrl || !Number.isFinite(id)) return null;
 
             return {
-              id: photo.id,
+              id,
               imageUrl,
             };
           })

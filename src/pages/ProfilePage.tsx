@@ -82,6 +82,7 @@ export function ProfilePage() {
                 <Card style={{ padding: 20 }}>
                   <strong>Reports</strong>
                   <h2>{dashboard?.stats.reportsCount ?? 0}</h2>
+                  <Link to="/my-pets">View my pets</Link>
                 </Card>
 
                 <Card style={{ padding: 20 }}>
@@ -104,7 +105,7 @@ export function ProfilePage() {
                   dashboard.recentReports.map((report) => (
                     <Link
                       key={report.id}
-                      to={`/nearby?pet=${report.id}&lat=${report.latitude}&lng=${report.longitude}&zoom=14`}
+                      to={`/my-pets?pet=${report.id}`}
                       style={{
                         display: "flex",
                         justifyContent: "space-between",

@@ -110,6 +110,7 @@ export function NearbyModals({
             latitude: selectedPet.latitude,
             longitude: selectedPet.longitude,
           }}
+          userLocation={userLocation}
           saving={savingSighting}
         />
       ) : null}

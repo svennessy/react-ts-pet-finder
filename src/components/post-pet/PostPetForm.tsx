@@ -108,11 +108,6 @@ export function PostPetForm({
         }
       />
 
-      <p style={{ margin: 0, color: "#6b7280" }}>
-        {value.latitude !== null && value.longitude !== null
-          ? `Selected location: ${value.latitude.toFixed(4)}, ${value.longitude.toFixed(4)}`
-          : "Click the map to set the pet location."}
-      </p>
     </form>
   );
 }

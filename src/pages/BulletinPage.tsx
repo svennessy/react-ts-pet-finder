@@ -74,7 +74,7 @@ export function BulletinPage() {
               {sightings.map((sighting) => (
                 <Link
                   key={sighting.id}
-                  to={`/nearby?pet=${sighting.petId}&lat=${sighting.latitude}&lng=${sighting.longitude}&zoom=14`}
+                  to={`/nearby?pet=${sighting.petId}&sighting=${sighting.id}&lat=${sighting.latitude}&lng=${sighting.longitude}&zoom=14`}
                   style={{
                     color: "inherit",
                     textDecoration: "none",
@@ -87,11 +87,32 @@ export function BulletinPage() {
                         justifyContent: "space-between",
                         gap: 12,
                         alignItems: "center",
+                        flexWrap: "wrap",
                       }}
                     >
-                      <Badge variant={sighting.pet.reportStatus}>
-                        {sighting.pet.reportStatus}
-                      </Badge>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 8,
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <Badge variant={sighting.pet.reportStatus}>
+                          {sighting.pet.reportStatus}
+                        </Badge>
+                        <Badge
+                          variant={
+                            sighting.verificationStatus === "verified"
+                              ? "verified"
+                              : "unverified"
+                          }
+                        >
+                          {sighting.verificationStatus === "verified"
+                            ? "Verified"
+                            : "Unverified"}
+                        </Badge>
+                      </div>
 
                       <span style={{ color: "#6b7280", fontSize: 13 }}>
                         {formatRelativeTime(sighting.createdAt)}

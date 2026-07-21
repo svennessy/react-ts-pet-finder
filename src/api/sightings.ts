@@ -1,11 +1,17 @@
-import { apiGet, apiPost } from "./client";
+import { apiDelete, apiGet, apiPatch, apiPost } from "./client";
 import type {
   CreatePetSightingBody,
   PetSighting,
   BulletinSighting,
+  UpdateSightingVerificationBody,
 } from "../types/sightings";
 
-export type { CreatePetSightingBody, PetSighting, BulletinSighting };
+export type {
+  CreatePetSightingBody,
+  PetSighting,
+  BulletinSighting,
+  UpdateSightingVerificationBody,
+};
 
 export async function fetchRecentSightings(signal?: AbortSignal) {
   return apiGet<{ sightings: BulletinSighting[]; total: number }>(
@@ -29,4 +35,23 @@ export async function createPetSighting(
     `/api/pets/${petId}/sightings`,
     body,
   );
+}
+
+export async function updateSightingVerification(
+  sightingId: string,
+  body: UpdateSightingVerificationBody,
+) {
+  return apiPatch<
+    {
+      id: string;
+      petId: string;
+      verificationStatus: string;
+      verifiedAt: string | null;
+    },
+    UpdateSightingVerificationBody
+  >(`/api/sightings/${sightingId}`, body);
+}
+
+export async function deleteSighting(sightingId: string) {
+  return apiDelete<{ id: string }>(`/api/sightings/${sightingId}`);
 }
